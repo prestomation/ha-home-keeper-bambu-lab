@@ -18,7 +18,7 @@
           "name_template": "Task name template"
         },
         "data_description": {
-          "name_template": "Use {printer_name} for the printer. Default: \"Update firmware: {printer_name}\"."
+          "name_template": "Use '{'printer_name'}' for the printer's name. Default: \"Update firmware: '{'printer_name'}'\"."
         }
       }
     }

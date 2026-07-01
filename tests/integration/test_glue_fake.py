@@ -77,6 +77,33 @@ def _make_bambu_update(
     return device.id, ent.entity_id
 
 
+def _make_bambu_binary_firmware(
+    hass: HomeAssistant, *, serial: str, state: str, name: str = "Printermation"
+) -> tuple[str, str]:
+    """Register the Bambu Lab firmware *binary_sensor* (device_class update) in *state*.
+
+    This is the variant the Bambu Lab integration exposes when its "Firmware update"
+    option is off (the default) — a binary_sensor keyed ``{serial}_firmware_update`` with
+    device_class ``update``, rather than an ``update`` entity. Returns (device_id, entity_id).
+    """
+    bambu_entry = MockConfigEntry(domain=BAMBU_DOMAIN, data={})
+    bambu_entry.add_to_hass(hass)
+    device = dr.async_get(hass).async_get_or_create(
+        config_entry_id=bambu_entry.entry_id,
+        identifiers={(BAMBU_DOMAIN, serial)},
+        name=name,
+    )
+    ent = er.async_get(hass).async_get_or_create(
+        "binary_sensor",
+        BAMBU_DOMAIN,
+        f"{serial}_firmware_update",
+        device_id=device.id,
+        original_device_class="update",
+    )
+    hass.states.async_set(ent.entity_id, state, {"device_class": "update"})
+    return device.id, ent.entity_id
+
+
 async def test_update_available_creates_read_only_armed_task(hass: HomeAssistant) -> None:
     hk = await async_setup_fake_home_keeper(hass)
     device_id, _ = _make_bambu_update(hass, serial="X1C123", state="on")
@@ -183,3 +210,62 @@ async def test_remove_entry_deletes_only_our_tasks(hass: HomeAssistant) -> None:
 
     assert ours_id not in hk.tasks  # our task cleaned up on removal
     assert "foreign" in hk.tasks  # someone else's task untouched
+
+
+async def test_binary_sensor_firmware_available_creates_task(hass: HomeAssistant) -> None:
+    # The default Bambu Lab setup (Firmware update option off) exposes firmware as a
+    # binary_sensor with device_class update, not an update entity. The glue must still
+    # create the task — this is the case a real default install hits.
+    hk = await async_setup_fake_home_keeper(hass)
+    device_id, _ = _make_bambu_binary_firmware(hass, serial="P1S1", state="on")
+    entry = await _setup_glue(hass)
+    await entry.runtime_data._reconcile()
+    await hass.async_block_till_done()
+
+    task = hk.get_task_by_source(DOMAIN, device_id=device_id)
+    assert task is not None
+    assert task["recurrence_type"] == "triggered"
+    assert task["next_due"]  # armed
+    assert task["managed_by"]["completion_blocked"] is True
+
+
+async def test_binary_sensor_firmware_live_transition_arms_then_clears(
+    hass: HomeAssistant,
+) -> None:
+    hk = await async_setup_fake_home_keeper(hass)
+    device_id, entity_id = _make_bambu_binary_firmware(hass, serial="P1S2", state="off")
+    await _setup_glue(hass)
+
+    hass.states.async_set(entity_id, "on", {"device_class": "update"})
+    await hass.async_block_till_done()
+    task = hk.get_task_by_source(DOMAIN, device_id=device_id)
+    assert task is not None and task["next_due"]  # armed
+
+    hass.states.async_set(entity_id, "off", {"device_class": "update"})
+    await hass.async_block_till_done()
+    task = hk.get_task_by_source(DOMAIN, device_id=device_id)
+    assert task["next_due"] is None
+    assert len(task["completions"]) == 1
+
+
+async def test_non_update_binary_sensor_is_ignored(hass: HomeAssistant) -> None:
+    # A bambu_lab binary_sensor that happens to end with the suffix but is NOT device_class
+    # update (defensive) must not create a task.
+    hk = await async_setup_fake_home_keeper(hass)
+    bambu_entry = MockConfigEntry(domain=BAMBU_DOMAIN, data={})
+    bambu_entry.add_to_hass(hass)
+    device = dr.async_get(hass).async_get_or_create(
+        config_entry_id=bambu_entry.entry_id,
+        identifiers={(BAMBU_DOMAIN, "weird")},
+        name="Weird",
+    )
+    ent = er.async_get(hass).async_get_or_create(
+        "binary_sensor", BAMBU_DOMAIN, "weird_firmware_update",
+        device_id=device.id, original_device_class="problem",
+    )
+    hass.states.async_set(ent.entity_id, "on", {"device_class": "problem"})
+    entry = await _setup_glue(hass)
+    await entry.runtime_data._reconcile()
+    await hass.async_block_till_done()
+
+    assert hk.get_task_by_source(DOMAIN, device_id=device.id) is None

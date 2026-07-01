@@ -40,8 +40,11 @@ the rest of your home maintenance, instead of being a lone entity you have to re
 
 ## How it works
 
-The Bambu Lab integration surfaces firmware as a standard Home Assistant **`update` entity**
-(`update.<printer>_firmware_update`). This glue watches that entity:
+The Bambu Lab integration surfaces firmware availability as one of two entities, depending
+on its **Firmware update** option — an **`update` entity** (`update.<printer>_firmware_update`)
+when the option is on, or a **`binary_sensor`** with device_class `update`
+(`binary_sensor.<printer>_firmware_update`) when it's off (the default). This glue watches
+**either** one — both read `on` when an update is available:
 
 | Firmware update entity | What the glue does |
 |---|---|

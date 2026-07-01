@@ -4,6 +4,21 @@ All notable changes to the Home Keeper — Bambu Lab glue are documented here. T
 follows [Keep a Changelog](https://keepachangelog.com/) and the project uses semantic
 versioning (with PEP 440 pre-release suffixes — `bN`/`aN`/`rcN` — for betas).
 
+## [0.1.0b2] - 2026-07-01
+
+### Fixed
+
+- **Firmware tasks now appear even when the Bambu Lab "Firmware update" option is off.**
+  The Bambu Lab integration exposes firmware availability as *either* an `update` entity
+  (option on) *or* a `binary_sensor` with device_class `update` (option off — the
+  default). The glue only watched the `update` entity, so on a default Bambu Lab setup no
+  task was ever created. It now mirrors *either* firmware entity (both are keyed
+  `{serial}_firmware_update` and read `on` when an update is available).
+- **Options dialog no longer shows a translation error.** The "Task name template" field
+  description embedded a literal `{printer_name}`, which Home Assistant's frontend parsed
+  as a missing translation placeholder (`formatjs … MISSING_VALUE`). The braces are now
+  escaped so the token renders as text.
+
 ## [0.1.0b1] - 2026-07-01
 
 First beta. Surfaces [Bambu Lab](https://github.com/greghesp/ha-bambulab) printer firmware

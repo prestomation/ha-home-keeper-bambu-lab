@@ -60,6 +60,21 @@ def test_bambu_firmware_contract_against_real_source():
         "ha-bambulab no longer sources firmware from upgrade.new_version/cur_version."
     )
 
+    # The other firmware surface: when the "Firmware update" option is off (the default),
+    # the integration exposes a binary_sensor keyed 'firmware_update' with device_class
+    # UPDATE instead of the update entity. The glue mirrors this variant too, so guard it.
+    definitions_py = _BAMBU_SRC / "definitions.py"
+    assert definitions_py.is_file(), "ha-bambulab no longer has definitions.py"
+    defs = definitions_py.read_text(encoding="utf-8")
+    assert 'key="firmware_update"' in defs, (
+        "ha-bambulab no longer defines a 'firmware_update' binary_sensor — the glue's "
+        "binary_sensor firmware path would silently stop matching."
+    )
+    assert "BinarySensorDeviceClass.UPDATE" in defs, (
+        "ha-bambulab's firmware binary_sensor is no longer device_class UPDATE — "
+        "re-check const.FIRMWARE_BINARY_DEVICE_CLASS."
+    )
+
 
 def test_available_then_installed_arms_then_clears_the_task(api):
     base = _count(api)
