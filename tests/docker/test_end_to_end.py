@@ -42,12 +42,19 @@ def test_bambu_firmware_contract_against_real_source():
     update_py = _BAMBU_SRC / "update.py"
     assert update_py.is_file(), "ha-bambulab no longer has update.py"
     text = update_py.read_text(encoding="utf-8")
-    assert 'key="firmware_update"' in text or "firmware_update" in text, (
-        "ha-bambulab no longer defines the firmware_update update entity — update const.py."
+    # The firmware update entity's description key. The glue's UPDATE_UNIQUE_SUFFIX is
+    # "_" + this key (the runtime unique_id is f"{serial}_{key}"), so if the key changes
+    # the glue stops matching the entity.
+    assert 'key="firmware_update"' in text, (
+        "ha-bambulab no longer keys its firmware update entity 'firmware_update' — "
+        "update const.UPDATE_UNIQUE_SUFFIX."
     )
-    assert "_firmware_update" in text, (
-        "ha-bambulab firmware update unique_id suffix changed — update "
-        "const.UPDATE_UNIQUE_SUFFIX."
+    # The unique_id is composed as f"{serial}_{description.key}" — that's what makes the
+    # entity id end with '_firmware_update'. The literal suffix never appears in source
+    # (it's assembled at runtime), so assert the composition instead.
+    assert "description.key" in text and "serial" in text, (
+        "ha-bambulab no longer builds the firmware update unique_id from "
+        "serial + description.key — re-check const.UPDATE_UNIQUE_SUFFIX."
     )
     assert "new_version" in text and "cur_version" in text, (
         "ha-bambulab no longer sources firmware from upgrade.new_version/cur_version."
