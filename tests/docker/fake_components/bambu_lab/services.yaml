@@ -1,0 +1,13 @@
+set_firmware_available:
+  name: Set firmware available
+  description: >-
+    Test helper — toggles whether the fake printer reports a firmware update as
+    available (drives the fake update entity between on/off for the e2e tiers).
+  fields:
+    available:
+      name: Available
+      description: Whether a firmware update should be reported as available.
+      required: false
+      default: true
+      selector:
+        boolean:

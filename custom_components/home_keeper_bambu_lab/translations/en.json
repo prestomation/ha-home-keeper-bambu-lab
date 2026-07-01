@@ -1,0 +1,26 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Home Keeper — Bambu Lab",
+        "description": "Surface a Bambu Lab printer's firmware update as a Home Keeper task, so a pending update shows up in your to-do list. The task clears itself once the printer's firmware is up to date. Requires both Home Keeper and the Bambu Lab integration."
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Already configured. Only a single instance is needed."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Bambu Lab glue options",
+        "data": {
+          "name_template": "Task name template"
+        },
+        "data_description": {
+          "name_template": "Use {printer_name} for the printer. Default: \"Update firmware: {printer_name}\"."
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,16 @@
+services:
+  homeassistant:
+    image: ghcr.io/home-assistant/home-assistant:stable
+    ports:
+      - "8123:8123"
+    volumes:
+      - ./ha_config:/config
+      # Home Keeper + the fake Bambu Lab + this glue are installed together so the
+      # end-to-end tier exercises the real Home Keeper + this glue against a Bambu Lab
+      # firmware update entity. Populate this directory first with
+      # `bash ci/fetch-upstreams.sh`.
+      - ./custom_components:/config/custom_components:ro
+    environment:
+      - TZ=America/New_York
+    tmpfs:
+      - /tmp
