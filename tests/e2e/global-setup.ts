@@ -144,7 +144,9 @@ export default async function globalSetup(): Promise<void> {
   mkdirSync(AUTH_DIR, { recursive: true });
   writeFileSync(TOKEN_PATH, token, 'utf8');
 
-  const browser = await chromium.launch();
+  const browser = await chromium.launch(
+    process.env.CHROMIUM_EXEC ? { executablePath: process.env.CHROMIUM_EXEC } : {},
+  );
   const context = await browser.newContext();
   const page = await context.newPage();
   try {

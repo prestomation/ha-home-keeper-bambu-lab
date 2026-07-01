@@ -23,10 +23,12 @@ device page, and in the mobile app, right next to everything else you have to ke
   date. Install the update from the Bambu Lab app or the printer's screen and the task
   clears on its own.
 
-> **Screenshots** are produced by the browser e2e tier driving the real stack
+<img src="docs/images/flow-1-firmware-available.png" alt="A pending firmware update shown as a due Home Keeper task" width="820">
+<img src="docs/images/flow-2-monitored.png" alt="The installed firmware's task resting in the Monitored section with a recorded completion" width="820">
+
+> Screenshots are produced by the browser e2e tier driving the real stack
 > (`SHOT_DIR=docs/images CAPTURE=1 bash ci/e2e-up.sh`), so they always reflect current
-> behaviour. They're captured in a Docker-capable environment and committed under
-> `docs/images/` — added in a follow-up to this scaffolding PR.
+> behaviour.
 
 ## Why
 
