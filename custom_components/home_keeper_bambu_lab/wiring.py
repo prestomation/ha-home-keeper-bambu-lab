@@ -31,14 +31,16 @@ from .const import (
     ATTR_LATEST_VERSION,
     ATTR_RELEASE_URL,
     BAMBU_DOMAIN,
+    BINARY_SENSOR_DOMAIN,
     DEFAULT_NAME_TEMPLATE,
     DOMAIN,
+    FIRMWARE_BINARY_DEVICE_CLASS,
+    FIRMWARE_DOMAINS,
     HK_DOMAIN,
     HK_EVENT_REGISTER_COMPANIONS,
     HK_SERVICE_REGISTER_COMPANION,
     OPT_NAME_TEMPLATE,
     ORIGIN,
-    UPDATE_DOMAIN,
     UPDATE_UNIQUE_SUFFIX,
 )
 
@@ -141,15 +143,34 @@ class BambuLabGlue:
             _LOGGER.debug("Home Keeper companion registration failed", exc_info=True)
 
     # ── entity tracking ──────────────────────────────────────────────────────
+    @staticmethod
+    def _is_firmware_entity(entity: er.RegistryEntry) -> bool:
+        """Whether *entity* is a Bambu Lab firmware entity (``update`` or ``binary_sensor``).
+
+        The Bambu Lab integration exposes firmware as an ``update`` entity or, when its
+        "Firmware update" option is off (the default), a ``binary_sensor`` with
+        device_class ``update`` — both keyed ``{serial}_firmware_update``. We accept
+        either; for the binary_sensor we also require the ``update`` device_class so we
+        don't pick up an unrelated binary_sensor that happens to share the suffix.
+        """
+        if entity.platform != BAMBU_DOMAIN:
+            return False
+        if entity.domain not in FIRMWARE_DOMAINS:
+            return False
+        if not (entity.unique_id or "").endswith(UPDATE_UNIQUE_SUFFIX):
+            return False
+        if entity.domain == BINARY_SENSOR_DOMAIN:
+            device_class = entity.device_class or entity.original_device_class
+            return device_class == FIRMWARE_BINARY_DEVICE_CLASS
+        return True
+
     def _bambu_update_entity_ids(self) -> frozenset[str]:
-        """Every Bambu Lab firmware ``update`` entity id, from the entity registry."""
+        """Every Bambu Lab firmware entity id, from the entity registry."""
         ent_reg = er.async_get(self.hass)
         return frozenset(
             entity.entity_id
             for entity in ent_reg.entities.values()
-            if entity.platform == BAMBU_DOMAIN
-            and entity.domain == UPDATE_DOMAIN
-            and (entity.unique_id or "").endswith(UPDATE_UNIQUE_SUFFIX)
+            if self._is_firmware_entity(entity)
         )
 
     @callback
@@ -314,12 +335,7 @@ class BambuLabGlue:
         available: dict[str, dict[str, Any]] = {}
         up_to_date: set[str] = set()
         for entity in ent_reg.entities.values():
-            if (
-                entity.platform != BAMBU_DOMAIN
-                or entity.domain != UPDATE_DOMAIN
-                or not (entity.unique_id or "").endswith(UPDATE_UNIQUE_SUFFIX)
-                or not entity.device_id
-            ):
+            if not self._is_firmware_entity(entity) or not entity.device_id:
                 continue
             state = self.hass.states.get(entity.entity_id)
             if state is None:

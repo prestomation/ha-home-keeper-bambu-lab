@@ -33,17 +33,25 @@ SOURCE_NS = DOMAIN
 ORIGIN = DOMAIN
 
 # ── Bambu Lab side (EXTERNAL CONTRACT — verify against a pinned release) ──────
-# These names are the Bambu Lab integration's surface, not ours. The firmware update
-# is a Home Assistant ``update`` entity whose registry ``platform`` is this domain and
-# whose ``unique_id`` ends with the suffix below (``{serial}_firmware_update``). Asserted
-# against the fetched, real integration by the docker contract test; if Bambu Lab renames
-# them, update here and re-pin BAMBU_REF.
+# These names are the Bambu Lab integration's surface, not ours. Asserted against the
+# fetched, real integration by the docker contract test; if Bambu Lab renames them,
+# update here and re-pin BAMBU_REF.
 BAMBU_DOMAIN = "bambu_lab"
-# HA entity domain the firmware update surfaces as.
+# The firmware update surfaces as ONE OF TWO entities, depending on the Bambu Lab
+# integration's "Firmware update" option (they are mutually exclusive):
+#   * option ON  → an ``update`` entity (``BambuLabUpdate``), which can also install; or
+#   * option OFF (the default) → a ``binary_sensor`` with device_class ``update`` that
+#     just reports availability.
+# Both share the ``{serial}_firmware_update`` unique_id and both read ``on`` when an
+# update is available / ``off`` when up to date, so the glue mirrors whichever exists.
 UPDATE_DOMAIN = "update"
-# ``BambuLabUpdate`` sets ``unique_id = f"{serial}_firmware_update"`` — we match on this
-# suffix so we only pick up the firmware update entity (not any future update entity).
+BINARY_SENSOR_DOMAIN = "binary_sensor"
+FIRMWARE_DOMAINS = (UPDATE_DOMAIN, BINARY_SENSOR_DOMAIN)
+# Both variants set ``unique_id = f"{serial}_firmware_update"`` — we match on this suffix
+# so we only pick up the firmware entity (not any other update/binary_sensor).
 UPDATE_UNIQUE_SUFFIX = "_firmware_update"
+# device_class of the binary_sensor variant — an extra sanity filter for that domain.
+FIRMWARE_BINARY_DEVICE_CLASS = "update"
 
 # Attributes a standard HA ``update`` entity exposes; we read these to enrich the task.
 ATTR_INSTALLED_VERSION = "installed_version"
