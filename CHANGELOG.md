@@ -16,8 +16,8 @@ versioning (with PEP 440 pre-release suffixes — `bN`/`aN`/`rcN` — for betas)
   `{serial}_firmware_update` and read `on` when an update is available).
 - **Options dialog no longer shows a translation error.** The "Task name template" field
   description embedded a literal `{printer_name}`, which Home Assistant's frontend parsed
-  as a missing translation placeholder (`formatjs … MISSING_VALUE`). The braces are now
-  escaped so the token renders as text.
+  as a missing translation placeholder (`formatjs … MISSING_VALUE`). The description was
+  reworded to describe the placeholder without literal braces.
 
 ## [0.1.0b1] - 2026-07-01
 
