@@ -1,0 +1,15 @@
+{
+  "domain": "home_keeper_bambu_lab",
+  "name": "Home Keeper — Bambu Lab",
+  "after_dependencies": ["bambu_lab", "home_keeper"],
+  "codeowners": ["@prestomation"],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/prestomation/ha-home-keeper-bambu-lab",
+  "integration_type": "service",
+  "iot_class": "calculated",
+  "issue_tracker": "https://github.com/prestomation/ha-home-keeper-bambu-lab/issues",
+  "requirements": [],
+  "single_config_entry": true,
+  "version": "0.1.0b1"
+}
