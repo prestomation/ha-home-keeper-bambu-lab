@@ -25,23 +25,26 @@ cp -r "$ROOT/custom_components/home_keeper_bambu_lab" "$STAGE/"
 echo "[fetch-upstreams] staging the fake Bambu Lab (runtime firmware entity)..."
 cp -r "$ROOT/tests/docker/fake_components/bambu_lab" "$STAGE/"
 
+# Clone *repo*@*ref* into a temp dir and print ONLY that dir on stdout. All logging and
+# git output is redirected to stderr so command substitution captures just the path.
 fetch() {
-  local repo="$1" ref="$2" dest="$3"
-  local tmp
+  local repo="$1" ref="$2" tmp
   tmp="$(mktemp -d)"
-  echo "[fetch-upstreams] cloning $(basename "$dest") ($repo@$ref)..."
-  git clone --depth 1 --branch "$ref" "$repo" "$tmp" 2>/dev/null \
-    || git clone --depth 1 "$repo" "$tmp"
+  {
+    echo "[fetch-upstreams] cloning $repo@$ref ..."
+    git clone --depth 1 --branch "$ref" "$repo" "$tmp" 2>/dev/null \
+      || git clone --depth 1 "$repo" "$tmp"
+  } >&2
   echo "$tmp"
 }
 
 # Home Keeper — the real integration, mounted + set up.
-HK_TMP="$(fetch "$HK_REPO" "$HK_REF" home_keeper)"
+HK_TMP="$(fetch "$HK_REPO" "$HK_REF")"
 cp -r "$HK_TMP/custom_components/home_keeper" "$STAGE/"
 
 # ha-bambulab — real source, source-only (NOT mounted/set up; needs a printer). Used by
 # the docker contract test to assert the firmware update entity still exists.
-BAMBU_TMP="$(fetch "$BAMBU_REPO" "$BAMBU_REF" bambu_lab)"
+BAMBU_TMP="$(fetch "$BAMBU_REPO" "$BAMBU_REF")"
 cp -r "$BAMBU_TMP/custom_components/bambu_lab" "$SRC/"
 rm -rf "$HK_TMP" "$BAMBU_TMP"
 

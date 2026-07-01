@@ -284,8 +284,11 @@ class BambuLabGlue:
         if not self._hk_ready("list_tasks"):
             return
         async with self._lock:
-            available, up_to_date = self._scan_updates()
+            # Fetch tasks first (the only await), then snapshot entity states with no
+            # await between the scan and the decision — so the reconcile can't act on an
+            # entity state that drifted while awaiting the task list.
             tasks = await self._list_tasks()
+            available, up_to_date = self._scan_updates()
             actions = logic.plan_reconcile(
                 tasks,
                 available,
