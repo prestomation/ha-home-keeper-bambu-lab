@@ -59,6 +59,15 @@ ATTR_LATEST_VERSION = "latest_version"
 ATTR_RELEASE_URL = "release_url"
 ATTR_TITLE = "title"
 
+# After a task clears (firmware installed), ignore a re-arm for the same printer for this
+# many seconds. A single install presents the update entity's ``on``→``off`` edge once,
+# but the printer's reboot/reconnect (or a stale/retained MQTT message, or a staged
+# version-by-version update) can briefly re-report the update as available afterwards;
+# re-arming on that flap and clearing again records a phantom second completion. A real
+# install takes far longer than this window, so suppressing a re-arm within it can't hide
+# a genuine new update.
+REARM_COOLDOWN_SECONDS = 15 * 60
+
 # ── Options (config_flow) ────────────────────────────────────────────────────
 OPT_NAME_TEMPLATE = "name_template"
 

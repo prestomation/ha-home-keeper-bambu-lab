@@ -41,6 +41,7 @@ from .const import (
     HK_SERVICE_REGISTER_COMPANION,
     OPT_NAME_TEMPLATE,
     ORIGIN,
+    REARM_COOLDOWN_SECONDS,
     UPDATE_UNIQUE_SUFFIX,
 )
 
@@ -59,6 +60,11 @@ class BambuLabGlue:
         self._lock = asyncio.Lock()
         self._tracked: frozenset[str] = frozenset()
         self._unsub_state: Any = None
+        # device_id → (monotonic timestamp, installed firmware version) of its last clear.
+        # Used to suppress a spurious re-arm during the printer's post-install
+        # reboot/reconnect flap (same version re-offered) so a single firmware install
+        # records a single completion. See REARM_COOLDOWN_SECONDS.
+        self._cleared: dict[str, tuple[float, Any]] = {}
 
     # ── options ──────────────────────────────────────────────────────────────
     @property
@@ -196,6 +202,24 @@ class BambuLabGlue:
     def _hk_ready(self, service: str) -> bool:
         return self.hass.services.has_service(HK_DOMAIN, service)
 
+    def _now(self) -> float:
+        """Monotonic clock for the re-arm cooldown (event-loop time; never goes back)."""
+        return self.hass.loop.time()
+
+    def _recently_cleared(self) -> dict[str, Any]:
+        """device_id → version-installed-at-clear, for printers still in re-arm cooldown.
+
+        Handed to the planners so a re-arm re-offering the same firmware a printer just
+        installed (a reconnect flap) is suppressed, while a genuinely newer firmware still
+        re-arms. Entries outside the cooldown window are dropped.
+        """
+        now = self._now()
+        return {
+            device_id: version
+            for device_id, (ts, version) in self._cleared.items()
+            if logic.within_cooldown(ts, now, REARM_COOLDOWN_SECONDS)
+        }
+
     async def _list_tasks(self) -> list[dict[str, Any]]:
         if not self._hk_ready("list_tasks"):
             return []
@@ -225,7 +249,19 @@ class BambuLabGlue:
                     {"task_id": action.task_id, "origin": ORIGIN},
                     blocking=True,
                 )
+                # Remember when (and at what version) this printer cleared, so a re-arm
+                # re-offering the same firmware during its post-install reboot/reconnect
+                # flap is suppressed (no phantom second completion).
+                self._cleared[action.device_id] = (self._now(), action.cleared_version)
                 _LOGGER.debug("Cleared firmware task %s", action.task_id)
+                # Refresh the note so a dormant task stops advertising an available update.
+                if action.notes is not None and self._hk_ready("update_task"):
+                    await self.hass.services.async_call(
+                        HK_DOMAIN,
+                        "update_task",
+                        {"task_id": action.task_id, "notes": action.notes},
+                        blocking=True,
+                    )
         elif isinstance(action, logic.DeleteTask):
             if self._hk_ready("delete_task"):
                 await self.hass.services.async_call(
@@ -235,15 +271,17 @@ class BambuLabGlue:
                     blocking=True,
                 )
                 _LOGGER.debug("Deleted firmware task %s", action.task_id)
-        elif isinstance(action, logic.UpdateChips):
+        elif isinstance(action, logic.UpdateTask):
             if self._hk_ready("update_task"):
+                payload: dict[str, Any] = {"task_id": action.task_id}
+                if action.chips is not None:
+                    payload["task_chips"] = action.chips
+                if action.notes is not None:
+                    payload["notes"] = action.notes
                 await self.hass.services.async_call(
-                    HK_DOMAIN,
-                    "update_task",
-                    {"task_id": action.task_id, "task_chips": action.chips},
-                    blocking=True,
+                    HK_DOMAIN, "update_task", payload, blocking=True
                 )
-                _LOGGER.debug("Refreshed chips on firmware task %s", action.task_id)
+                _LOGGER.debug("Refreshed firmware task %s", action.task_id)
 
     # ── firmware update state handler ────────────────────────────────────────
     async def _on_update_state(self, event: Event) -> None:
@@ -269,9 +307,14 @@ class BambuLabGlue:
                     latest_version=info["latest_version"],
                     installed_version=info["installed_version"],
                     release_url=info["release_url"],
+                    recently_cleared=self._recently_cleared(),
                 )
             elif new_state is not None and new_state.state == "off":
-                action = logic.plan_update_cleared(tasks, device_id=entry.device_id)
+                action = logic.plan_update_cleared(
+                    tasks,
+                    device_id=entry.device_id,
+                    installed_version=new_state.attributes.get(ATTR_INSTALLED_VERSION),
+                )
             else:
                 # unavailable/unknown (printer offline) — leave the task as it is.
                 action = None
@@ -316,24 +359,26 @@ class BambuLabGlue:
                 up_to_date,
                 config_entry_id=self.entry.entry_id,
                 name_template=self._name_template,
+                recently_cleared=self._recently_cleared(),
             )
             for action in actions:
                 await self._execute(action)
             if actions:
                 _LOGGER.debug("Reconcile applied %d action(s)", len(actions))
 
-    def _scan_updates(self) -> tuple[dict[str, dict[str, Any]], set[str]]:
+    def _scan_updates(self) -> tuple[dict[str, dict[str, Any]], dict[str, Any]]:
         """Snapshot Bambu Lab's firmware update entities for a reconcile.
 
         Returns ``(available, up_to_date)``: *available* maps ``device_id`` → firmware
-        info for entities reading ``on`` (arm/create), *up_to_date* is the set of devices
-        whose entity affirmatively reads ``off`` (clear). An entity that's
+        info for entities reading ``on`` (arm/create); *up_to_date* maps ``device_id`` →
+        the installed firmware version (or ``None`` when the entity doesn't report one) for
+        devices whose entity affirmatively reads ``off`` (clear). An entity that's
         ``unavailable``/``unknown`` (printer offline) lands in neither — we neither arm
         nor clear from it, so an offline printer keeps whatever task state it had.
         """
         ent_reg = er.async_get(self.hass)
         available: dict[str, dict[str, Any]] = {}
-        up_to_date: set[str] = set()
+        up_to_date: dict[str, Any] = {}
         for entity in ent_reg.entities.values():
             if not self._is_firmware_entity(entity) or not entity.device_id:
                 continue
@@ -345,5 +390,7 @@ class BambuLabGlue:
                     entity.device_id, entity.entity_id, state
                 )
             elif state.state == "off":
-                up_to_date.add(entity.device_id)
+                up_to_date[entity.device_id] = state.attributes.get(
+                    ATTR_INSTALLED_VERSION
+                )
         return available, up_to_date

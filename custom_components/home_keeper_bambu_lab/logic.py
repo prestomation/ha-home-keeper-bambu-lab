@@ -53,10 +53,21 @@ class ArmTask:
 
 @dataclass(frozen=True)
 class ClearTask:
-    """Clear an armed task (call ``home_keeper.complete_task``)."""
+    """Clear an armed task (call ``home_keeper.complete_task``).
+
+    When *notes* is set, the task's notes are also refreshed (via ``update_task``) after
+    the completion is recorded, so a dormant task stops advertising an available update —
+    it reads *"Firmware up to date …"* instead of the frozen *"… available"* line.
+
+    *cleared_version* is the firmware installed at clear time (``None`` when the entity
+    doesn't report one). ``wiring.py`` stamps it so a re-arm that merely re-offers this same
+    version during the post-install reconnect flap is recognised as stale and suppressed.
+    """
 
     task_id: str
     device_id: str
+    notes: str | None = None
+    cleared_version: Any = None
 
 
 @dataclass(frozen=True)
@@ -68,20 +79,23 @@ class DeleteTask:
 
 
 @dataclass(frozen=True)
-class UpdateChips:
-    """Refresh ``task_chips`` on an existing task when the firmware version changes.
+class UpdateTask:
+    """Refresh mirrored fields (``task_chips`` / ``notes``) on an existing armed task.
 
-    Emitted during reconcile when the armed task's chips no longer match the current
-    ``latest_version`` / release URL (e.g. a newer firmware superseded the one the task
-    was created for), so the card always shows the version actually available.
+    Emitted during reconcile when the armed task's chips or notes no longer match the
+    current ``latest_version`` / ``installed_version`` / release URL (e.g. a newer firmware
+    superseded the one the task was created for), so the card always shows the version
+    actually available. Each field is ``None`` when it hasn't drifted, so ``wiring.py``
+    only sends the fields that changed.
     """
 
     task_id: str
     device_id: str
-    chips: list[dict[str, str]]
+    chips: list[dict[str, str]] | None = None
+    notes: str | None = None
 
 
-Action = CreateTask | ArmTask | ClearTask | DeleteTask | UpdateChips
+Action = CreateTask | ArmTask | ClearTask | DeleteTask | UpdateTask
 
 
 # ── helpers over the Home Keeper task list ───────────────────────────────────
@@ -133,6 +147,44 @@ def _format_notes(latest_version: Any, installed_version: Any) -> str:
     if installed_version:
         bits.append(f"installed {installed_version}")
     return " · ".join(bits)
+
+
+def format_up_to_date_notes(installed_version: Any) -> str:
+    """Note for a task the printer has finished updating (firmware now current).
+
+    Replaces the frozen *"… available"* line so a dormant task stops advertising an
+    update. Includes the version when the entity reports it (the ``update`` variant);
+    the version-less ``binary_sensor`` variant just reads *"Firmware up to date"*.
+    """
+    if installed_version:
+        return f"Firmware up to date · {installed_version}"
+    return "Firmware up to date"
+
+
+def within_cooldown(last_cleared: float | None, now: float, cooldown: float) -> bool:
+    """Whether a task cleared at *last_cleared* is still within its re-arm cooldown.
+
+    A single firmware install can present more than one ``on``→``off`` edge — the printer
+    reboots and reconnects, and a stale/retained MQTT message (or a staged
+    version-by-version update) can briefly re-report an update as available after the task
+    already cleared. Re-arming on that spurious ``on`` and clearing again on the next
+    ``off`` records a phantom second completion. The cooldown bounds how long after a clear
+    we treat a re-arm as suspect; ``None`` (never cleared) is never in cooldown.
+    """
+    return last_cleared is not None and (now - last_cleared) < cooldown
+
+
+def _is_stale_rearm(offered_version: Any, cleared_version: Any) -> bool:
+    """Whether re-offering *offered_version* right after clearing *cleared_version* is noise.
+
+    A genuine new update offers a *different* firmware than the one we just installed, so it
+    should re-arm even inside the cooldown. A flap re-offers the *same* version (or the
+    entity reports no version at all — the ``binary_sensor`` variant — so we can't tell them
+    apart and treat it as a flap). Only the same-version / version-less case is suppressed.
+    """
+    if cleared_version is None or offered_version is None:
+        return True
+    return str(offered_version) == str(cleared_version)
 
 
 def build_firmware_chips(
@@ -205,10 +257,17 @@ def plan_update_available(
     latest_version: Any = None,
     installed_version: Any = None,
     release_url: Any = None,
+    recently_cleared: dict[str, Any] | None = None,
 ) -> Action | None:
     """Decide what to do when *device_id* has a firmware update available.
 
     Absent → create (born armed). Dormant → arm. Already armed → nothing.
+
+    *recently_cleared* maps ``device_id`` → the firmware installed at its last clear, for
+    printers still inside the post-install cooldown (``wiring.py`` builds it from the clock).
+    A dormant task whose printer is in that map and is being re-offered the *same* firmware
+    it just installed is a reconnect flap, not a real update — we suppress the re-arm so a
+    single install records a single completion.
     """
     task = task_for_device(tasks, device_id)
     if task is None:
@@ -227,39 +286,56 @@ def plan_update_available(
         )
     if is_armed(task):
         return None
+    if (
+        recently_cleared is not None
+        and device_id in recently_cleared
+        and _is_stale_rearm(latest_version, recently_cleared[device_id])
+    ):
+        return None
     return ArmTask(task["id"], device_id)
 
 
-def plan_update_cleared(tasks: list[dict], *, device_id: str) -> Action | None:
+def plan_update_cleared(
+    tasks: list[dict], *, device_id: str, installed_version: Any = None
+) -> Action | None:
     """Decide what to do when *device_id*'s firmware is up to date again.
 
-    Armed → clear (records the completion, goes dormant). Dormant/absent → nothing.
+    Armed → clear (records the completion, goes dormant, refreshes the notes to *"Firmware
+    up to date …"*). Dormant/absent → nothing.
     """
     task = task_for_device(tasks, device_id)
     if task is None or not is_armed(task):
         return None
-    return ClearTask(task["id"], device_id)
+    return ClearTask(
+        task["id"],
+        device_id,
+        notes=format_up_to_date_notes(installed_version),
+        cleared_version=installed_version,
+    )
 
 
 def plan_reconcile(
     tasks: list[dict],
     available: dict[str, dict[str, Any]],
-    up_to_date: set[str],
+    up_to_date: dict[str, Any],
     *,
     config_entry_id: str,
     name_template: str,
+    recently_cleared: dict[str, Any] | None = None,
 ) -> list[Action]:
     """Converge the full state at startup (catch up on transitions missed while down).
 
     *available* maps ``device_id`` → its firmware info (name + version fields + entity_id)
     for every Bambu printer whose update entity currently reads ``on``; each gets a
-    created/armed task, and an armed task whose chips no longer match the current version
-    is refreshed.
+    created/armed task, and an armed task whose chips or notes no longer match the current
+    version is refreshed.
 
     Clearing is **affirmative**: we only clear an armed task whose printer is in
-    *up_to_date* — one whose update entity affirmatively reads ``off``. A printer that's
-    merely offline (``unavailable``/``unknown``, so in neither set) keeps its armed task,
-    so a printer that powers off mid-update-window doesn't record a phantom "installed".
+    *up_to_date* — a mapping of ``device_id`` → the printer's installed firmware version
+    (or ``None`` when the entity doesn't report one), for printers whose update entity
+    affirmatively reads ``off``. A printer that's merely offline
+    (``unavailable``/``unknown``, so in neither collection) keeps its armed task, so a
+    printer that powers off mid-update-window doesn't record a phantom "installed".
     Idempotent no-ops are dropped.
     """
     actions: list[Action] = []
@@ -275,22 +351,44 @@ def plan_reconcile(
             latest_version=info.get("latest_version"),
             installed_version=info.get("installed_version"),
             release_url=info.get("release_url"),
+            recently_cleared=recently_cleared,
         )
         if action is not None:
             actions.append(action)
-        # If the task already existed (arm or already-armed no-op), keep its chips in
-        # step with the version currently on offer — a newer firmware may have superseded
-        # the one the task was created for.
+        # If the task already existed (arm or already-armed no-op), keep its mirrored
+        # fields in step with the version currently on offer — a newer firmware may have
+        # superseded the one the task was created for. Only the fields that drifted are
+        # sent (the rest stay ``None``).
         existing = task_for_device(tasks, device_id)
         if existing is not None:
-            desired = build_firmware_chips(
+            desired_chips = build_firmware_chips(
                 info.get("latest_version"), info.get("release_url")
             )
-            if (existing.get("task_chips") or []) != desired:
-                actions.append(UpdateChips(existing["id"], device_id, desired))
+            desired_notes = _format_notes(
+                info.get("latest_version"), info.get("installed_version")
+            )
+            chips_drift = (existing.get("task_chips") or []) != desired_chips
+            notes_drift = (existing.get("notes") or "") != desired_notes
+            if chips_drift or notes_drift:
+                actions.append(
+                    UpdateTask(
+                        existing["id"],
+                        device_id,
+                        chips=desired_chips if chips_drift else None,
+                        notes=desired_notes if notes_drift else None,
+                    )
+                )
 
     for task in our_tasks(tasks):
         device_id = (task["source"][SOURCE_NS]).get("device_id")
         if device_id in up_to_date and is_armed(task):
-            actions.append(ClearTask(task["id"], device_id))
+            installed = up_to_date.get(device_id)
+            actions.append(
+                ClearTask(
+                    task["id"],
+                    device_id,
+                    notes=format_up_to_date_notes(installed),
+                    cleared_version=installed,
+                )
+            )
     return actions

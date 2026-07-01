@@ -142,6 +142,66 @@ async def test_live_transition_arms_then_clears(hass: HomeAssistant) -> None:
     assert len(task["completions"]) == 1
 
 
+async def test_note_refreshes_to_up_to_date_after_install(hass: HomeAssistant) -> None:
+    # After the firmware installs, the note must stop advertising the (now-installed)
+    # update — a dormant task shouldn't read "… available" forever.
+    hk = await async_setup_fake_home_keeper(hass)
+    device_id, entity_id = _make_bambu_update(hass, serial="NOTE1", state="off")
+    await _setup_glue(hass)
+
+    hass.states.async_set(
+        entity_id,
+        "on",
+        {"latest_version": "01.08.02.00", "installed_version": "01.06.00.00"},
+    )
+    await hass.async_block_till_done()
+    task = hk.get_task_by_source(DOMAIN, device_id=device_id)
+    assert "available" in (task.get("notes") or "")
+
+    # Installed: entity returns to off, now reporting the new version as installed.
+    hass.states.async_set(entity_id, "off", {"installed_version": "01.08.02.00"})
+    await hass.async_block_till_done()
+    task = hk.get_task_by_source(DOMAIN, device_id=device_id)
+    assert task["next_due"] is None
+    assert task["notes"] == "Firmware up to date · 01.08.02.00"
+
+
+async def test_flapping_after_install_does_not_double_complete(
+    hass: HomeAssistant,
+) -> None:
+    # A single install can present more than one on->off edge (the printer reboots and a
+    # stale/retained MQTT message briefly re-reports the update as available). The glue
+    # must record exactly one completion, not one per edge.
+    hk = await async_setup_fake_home_keeper(hass)
+    device_id, entity_id = _make_bambu_update(hass, serial="FLAP1", state="off")
+    await _setup_glue(hass)
+
+    # Update available -> armed.
+    hass.states.async_set(
+        entity_id,
+        "on",
+        {"latest_version": "01.08.02.00", "installed_version": "01.06.00.00"},
+    )
+    await hass.async_block_till_done()
+    # Install completes -> off (completion #1).
+    hass.states.async_set(entity_id, "off", {"installed_version": "01.08.02.00"})
+    await hass.async_block_till_done()
+    # Reconnect flap: a stale message briefly re-reports the update as available...
+    hass.states.async_set(
+        entity_id,
+        "on",
+        {"latest_version": "01.08.02.00", "installed_version": "01.06.00.00"},
+    )
+    await hass.async_block_till_done()
+    # ...then it settles up to date again.
+    hass.states.async_set(entity_id, "off", {"installed_version": "01.08.02.00"})
+    await hass.async_block_till_done()
+
+    task = hk.get_task_by_source(DOMAIN, device_id=device_id)
+    assert task["next_due"] is None  # dormant, not re-armed
+    assert len(task["completions"]) == 1  # one install, one completion — not two
+
+
 async def test_offline_printer_does_not_clear_armed_task(hass: HomeAssistant) -> None:
     # An armed task must survive the printer going offline (entity unavailable) — clearing
     # it would record a phantom firmware install.

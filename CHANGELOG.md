@@ -4,6 +4,25 @@ All notable changes to the Home Keeper — Bambu Lab glue are documented here. T
 follows [Keep a Changelog](https://keepachangelog.com/) and the project uses semantic
 versioning (with PEP 440 pre-release suffixes — `bN`/`aN`/`rcN` — for betas).
 
+## [Unreleased]
+
+### Fixed
+
+- **A single firmware install no longer records two completions.** A printer's
+  update entity can present more than one `on`→`off` edge for one install — the printer
+  reboots and reconnects, and a stale/retained MQTT message (or a staged,
+  version-by-version update) can briefly re-report the update as available after the task
+  already cleared. The glue re-armed on that flap and cleared again, logging a phantom
+  second completion. For a short window after a clear it now ignores a re-arm that merely
+  re-offers the *same* firmware the printer just installed (a genuinely newer firmware
+  still re-arms immediately), so one install records one completion.
+- **A firmware task's note no longer stays frozen at "… available" after the update.**
+  The note was written only when the task was created and never refreshed, so a task that
+  had already cleared kept advertising the (now-installed) update — e.g. *"Firmware
+  01.08.01.00 available · installed 01.06.00.00"*. It now reads *"Firmware up to date …"*
+  once the printer reports it's current, and is kept in step (alongside the version chip)
+  when a newer firmware supersedes the one the task was created for.
+
 ## [0.1.0b2] - 2026-07-01
 
 ### Fixed
