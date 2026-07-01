@@ -10,7 +10,8 @@ cd "$ROOT"
 
 cleanup() {
   if [ "${KEEP_UP:-0}" != "1" ]; then
-    (cd tests/docker && docker compose down -v) || true
+    # Absolute path: the trap fires after we've cd'd into tests/e2e to run Playwright.
+    (cd "$ROOT/tests/docker" && docker compose down -v) || true
   fi
 }
 trap cleanup EXIT
