@@ -4,6 +4,7 @@
 [![License][license-shield]](LICENSE)
 [![hacs][hacs-shield]][hacs]
 ![Project Maintenance][maintenance-shield]
+[![ko-fi][kofi-shield]][kofi]
 
 A small glue integration that surfaces a [Bambu Lab](https://github.com/greghesp/ha-bambulab)
 printer's **firmware updates** as [Home Keeper](https://github.com/prestomation/ha-home-keeper)
@@ -116,3 +117,5 @@ and [`docs/GLUE_INTEGRATIONS.md`](https://github.com/prestomation/ha-home-keeper
 [hacs-shield]: https://img.shields.io/badge/HACS-Custom-41BDF5.svg?style=for-the-badge
 [hacs]: https://github.com/hacs/integration
 [maintenance-shield]: https://img.shields.io/badge/maintainer-%40prestomation-blue.svg?style=for-the-badge
+[kofi-shield]: https://img.shields.io/badge/Ko--fi-donate-FF5E5B?style=for-the-badge&logo=kofi&logoColor=white
+[kofi]: https://ko-fi.com/prestomation
