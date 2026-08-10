@@ -4,7 +4,31 @@ All notable changes to the Home Keeper — Bambu Lab glue are documented here. T
 follows [Keep a Changelog](https://keepachangelog.com/) and the project uses semantic
 versioning (with PEP 440 pre-release suffixes — `bN`/`aN`/`rcN` — for betas).
 
-## [Unreleased]
+## [0.2.0b1]
+
+### Added
+
+- **Optional printer maintenance tasks, following Bambu Lab's own published schedule.**
+  Turn on **Also create printer maintenance tasks** in the options and the glue creates a
+  Home Keeper task per item per printer: lead-screw greasing, rod cleaning and anti-rust,
+  the activated carbon filter, the camera lens, and (off by default, because weekly is a
+  lot) the extruder gear and toolhead fans.
+
+  The items Bambu measures in hours are metered against the printer's
+  `total_usage_hours` sensor with the calendar figure as a backstop, so whichever lands
+  first wins. That is Bambu's own guidance, not an invention: the X1 wiki rates the air
+  filter at *"every three months if the printer is used for about 8 hours a day"* and
+  *"every month"* for a production machine, which is 720 printer hours either way. A
+  printer that runs constantly comes due on hours; one that mostly rests comes due on the
+  calendar.
+
+  Every interval is a default you can change, in the options or on the task itself, and
+  every item can be switched off. The nozzle and the cutter blade are deliberately absent:
+  Bambu publishes those in spools of filament, which no sensor exposes, so there is no
+  honest number to ship. See the README and `docs/MAINTENANCE_CATALOG_PLAN.md`.
+
+  Needs Home Keeper 0.12.0 for the hours-or-calendar behaviour. Against an older version
+  the tasks still work as plain meters.
 
 ### Fixed
 

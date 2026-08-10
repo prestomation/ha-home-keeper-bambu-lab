@@ -24,7 +24,10 @@
         "minor_version": 1,
         "domain": "bambu_lab",
         "title": "X1 Carbon",
-        "data": { "serial": "E2E0001", "name": "X1 Carbon" },
+        "data": {
+          "serial": "E2E0001",
+          "name": "X1 Carbon"
+        },
         "options": {},
         "pref_disable_new_entities": false,
         "pref_disable_polling": false,
@@ -39,7 +42,16 @@
         "domain": "home_keeper_bambu_lab",
         "title": "Bambu Lab",
         "data": {},
-        "options": {},
+        "options": {
+          "maintenance": true,
+          "item_z_lead_screws_enabled": true,
+          "item_z_lead_screws_interval": 5,
+          "item_linear_rods_enabled": false,
+          "item_carbon_filter_enabled": false,
+          "item_carbon_rods_enabled": false,
+          "item_rod_antirust_enabled": false,
+          "item_camera_lens_enabled": false
+        },
         "pref_disable_new_entities": false,
         "pref_disable_polling": false,
         "source": "user",

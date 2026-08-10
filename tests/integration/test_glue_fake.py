@@ -104,7 +104,9 @@ def _make_bambu_binary_firmware(
     return device.id, ent.entity_id
 
 
-async def test_update_available_creates_read_only_armed_task(hass: HomeAssistant) -> None:
+async def test_update_available_creates_read_only_armed_task(
+    hass: HomeAssistant,
+) -> None:
     hk = await async_setup_fake_home_keeper(hass)
     device_id, _ = _make_bambu_update(hass, serial="X1C123", state="on")
     entry = await _setup_glue(hass)
@@ -234,13 +236,17 @@ async def test_reconcile_clears_when_up_to_date(hass: HomeAssistant) -> None:
     assert hk.get_task_by_source(DOMAIN, device_id=device_id)["next_due"] is None
 
 
-async def test_duplicate_available_events_do_not_duplicate_tasks(hass: HomeAssistant) -> None:
+async def test_duplicate_available_events_do_not_duplicate_tasks(
+    hass: HomeAssistant,
+) -> None:
     hk = await async_setup_fake_home_keeper(hass)
     _, entity_id = _make_bambu_update(hass, serial="X1D", state="off")
     await _setup_glue(hass)
 
     hass.states.async_set(entity_id, "on", {"latest_version": "1"})
-    hass.states.async_set(entity_id, "on", {"latest_version": "1", "installed_version": "0"})
+    hass.states.async_set(
+        entity_id, "on", {"latest_version": "1", "installed_version": "0"}
+    )
     await hass.async_block_till_done()
 
     ours = [t for t in hk.tasks.values() if (t.get("source") or {}).get(DOMAIN)]
@@ -263,7 +269,11 @@ async def test_remove_entry_deletes_only_our_tasks(hass: HomeAssistant) -> None:
     await entry.runtime_data._reconcile()
     await hass.async_block_till_done()
     ours_id = hk.get_task_by_source(DOMAIN, device_id=device_id)["id"]
-    hk.tasks["foreign"] = {"id": "foreign", "source": {"other": {"x": 1}}, "next_due": None}
+    hk.tasks["foreign"] = {
+        "id": "foreign",
+        "source": {"other": {"x": 1}},
+        "next_due": None,
+    }
 
     await hass.config_entries.async_remove(entry.entry_id)
     await hass.async_block_till_done()
@@ -272,7 +282,9 @@ async def test_remove_entry_deletes_only_our_tasks(hass: HomeAssistant) -> None:
     assert "foreign" in hk.tasks  # someone else's task untouched
 
 
-async def test_binary_sensor_firmware_available_creates_task(hass: HomeAssistant) -> None:
+async def test_binary_sensor_firmware_available_creates_task(
+    hass: HomeAssistant,
+) -> None:
     # The default Bambu Lab setup (Firmware update option off) exposes firmware as a
     # binary_sensor with device_class update, not an update entity. The glue must still
     # create the task — this is the case a real default install hits.
@@ -320,8 +332,11 @@ async def test_non_update_binary_sensor_is_ignored(hass: HomeAssistant) -> None:
         name="Weird",
     )
     ent = er.async_get(hass).async_get_or_create(
-        "binary_sensor", BAMBU_DOMAIN, "weird_firmware_update",
-        device_id=device.id, original_device_class="problem",
+        "binary_sensor",
+        BAMBU_DOMAIN,
+        "weird_firmware_update",
+        device_id=device.id,
+        original_device_class="problem",
     )
     hass.states.async_set(ent.entity_id, "on", {"device_class": "problem"})
     entry = await _setup_glue(hass)
@@ -329,3 +344,130 @@ async def test_non_update_binary_sensor_is_ignored(hass: HomeAssistant) -> None:
     await hass.async_block_till_done()
 
     assert hk.get_task_by_source(DOMAIN, device_id=device.id) is None
+
+
+# ── maintenance catalog ──────────────────────────────────────────────────────
+def _make_usage_hours_sensor(
+    hass: HomeAssistant, *, serial: str, device_id: str, hours: float = 660.0
+) -> str:
+    """Register the printer's cumulative usage-hours sensor on an existing device."""
+    ent = er.async_get(hass).async_get_or_create(
+        "sensor",
+        BAMBU_DOMAIN,
+        f"{serial}_total_usage_hours",
+        device_id=device_id,
+    )
+    hass.states.async_set(ent.entity_id, str(hours), {"unit_of_measurement": "h"})
+    return ent.entity_id
+
+
+def _catalog_tasks(hk) -> list[dict]:
+    return [
+        t
+        for t in hk.tasks()
+        if (t.get("source") or {}).get(DOMAIN, {}).get("item", "firmware") != "firmware"
+    ]
+
+
+async def _setup_glue_with_options(
+    hass: HomeAssistant, options: dict
+) -> MockConfigEntry:
+    entry = MockConfigEntry(domain=DOMAIN, data={}, options=options)
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    return entry
+
+
+async def test_catalog_off_by_default_creates_no_maintenance_tasks(
+    hass: HomeAssistant,
+) -> None:
+    # Someone who installed this glue for firmware mirroring must not wake up to eight
+    # new tasks per printer after an upgrade.
+    hk = await async_setup_fake_home_keeper(hass)
+    device_id, _ = _make_bambu_update(hass, serial="X1C900", state="off")
+    _make_usage_hours_sensor(hass, serial="X1C900", device_id=device_id)
+    await _setup_glue(hass)
+    assert _catalog_tasks(hk) == []
+
+
+async def test_catalog_pushes_a_usage_task_with_a_time_backstop(
+    hass: HomeAssistant,
+) -> None:
+    hk = await async_setup_fake_home_keeper(hass)
+    device_id, _ = _make_bambu_update(hass, serial="X1C901", state="off")
+    usage_entity = _make_usage_hours_sensor(hass, serial="X1C901", device_id=device_id)
+    await _setup_glue_with_options(
+        hass,
+        {
+            "maintenance": True,
+            "item_z_lead_screws_enabled": True,
+            # Everything else off, so the assertion is about one task.
+            "item_linear_rods_enabled": False,
+            "item_carbon_filter_enabled": False,
+            "item_carbon_rods_enabled": False,
+            "item_rod_antirust_enabled": False,
+            "item_camera_lens_enabled": False,
+        },
+    )
+    tasks = _catalog_tasks(hk)
+    assert len(tasks) == 1
+    task = tasks[0]
+    assert task["recurrence_type"] == "sensor"
+    assert task["sensor"]["entity_id"] == usage_entity
+    assert task["sensor"]["mode"] == "usage"
+    assert task["sensor"]["also_every"] == {"interval": 3, "unit": "months"}
+    assert task["sensor"]["combinator"] == "any"
+    assert task["device_id"] == device_id
+    # A human does this work, so it must stay completable and editable.
+    managed = task["managed_by"]
+    assert not managed.get("completion_blocked")
+    assert "sensor" not in managed["locked_fields"]
+
+
+async def test_calendar_only_item_pushes_a_floating_task(hass: HomeAssistant) -> None:
+    hk = await async_setup_fake_home_keeper(hass)
+    device_id, _ = _make_bambu_update(hass, serial="X1C902", state="off")
+    _make_usage_hours_sensor(hass, serial="X1C902", device_id=device_id)
+    await _setup_glue_with_options(
+        hass,
+        {
+            "maintenance": True,
+            "item_carbon_rods_enabled": True,
+            "item_linear_rods_enabled": False,
+            "item_z_lead_screws_enabled": False,
+            "item_carbon_filter_enabled": False,
+            "item_rod_antirust_enabled": False,
+            "item_camera_lens_enabled": False,
+        },
+    )
+    tasks = _catalog_tasks(hk)
+    assert len(tasks) == 1
+    assert tasks[0]["recurrence_type"] == "floating"
+    assert tasks[0]["unit"] == "months"
+    assert "sensor" not in tasks[0]
+
+
+async def test_catalog_and_firmware_tasks_coexist(hass: HomeAssistant) -> None:
+    # The firmware mirror and the maintenance tasks share a device and a source
+    # namespace; each planner must only see its own.
+    hk = await async_setup_fake_home_keeper(hass)
+    device_id, _ = _make_bambu_update(hass, serial="X1C903", state="on")
+    _make_usage_hours_sensor(hass, serial="X1C903", device_id=device_id)
+    await _setup_glue_with_options(
+        hass,
+        {
+            "maintenance": True,
+            "item_z_lead_screws_enabled": True,
+            "item_linear_rods_enabled": False,
+            "item_carbon_filter_enabled": False,
+            "item_carbon_rods_enabled": False,
+            "item_rod_antirust_enabled": False,
+            "item_camera_lens_enabled": False,
+        },
+    )
+    all_tasks = hk.tasks()
+    firmware = [t for t in all_tasks if t["recurrence_type"] == "triggered"]
+    assert len(firmware) == 1
+    assert firmware[0]["next_due"]  # still armed by the update entity
+    assert len(_catalog_tasks(hk)) == 1

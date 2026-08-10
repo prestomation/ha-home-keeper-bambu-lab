@@ -29,6 +29,23 @@ export async function setFirmwareAvailable(
   expect(r.ok(), `set_firmware_available(${available}) failed: ${r.status()}`).toBeTruthy();
 }
 
+/**
+ * Wind the fake printer's cumulative usage-hours counter forward.
+ *
+ * The maintenance catalog meters against `total_usage_hours`, so this is how the e2e
+ * tiers make a usage task cross its target without waiting for real print time.
+ */
+export async function advanceUsageHours(
+  request: APIRequestContext,
+  hours: number,
+): Promise<void> {
+  const r = await request.post(`${HA_URL}/api/services/bambu_lab/advance_usage_hours`, {
+    headers: { Authorization: `Bearer ${authToken()}` },
+    data: { hours },
+  });
+  expect(r.ok(), `advance_usage_hours(${hours}) failed: ${r.status()}`).toBeTruthy();
+}
+
 /** Navigate to the Home Keeper panel and wait for the custom element to upgrade. */
 export async function openPanel(page: Page): Promise<void> {
   await page.goto(PANEL_URL, { waitUntil: 'domcontentloaded' });

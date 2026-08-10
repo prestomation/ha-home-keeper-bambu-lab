@@ -15,10 +15,44 @@
       "init": {
         "title": "Bambu Lab glue options",
         "data": {
-          "name_template": "Task name template"
+          "name_template": "Task name template",
+          "maintenance": "Also create printer maintenance tasks"
         },
         "data_description": {
-          "name_template": "Name for each printer's firmware task. Use the word printer_name in braces as a placeholder for the printer's name — as shown in the default."
+          "name_template": "Name for each printer's firmware task. Use the word printer_name in braces as a placeholder for the printer's name — as shown in the default.",
+          "maintenance": "Create Home Keeper tasks for Bambu Lab's published maintenance schedule — lead-screw greasing, rod cleaning, the air filter and so on. The ones measured in printer hours are metered against the printer's usage-hours sensor, with a calendar backstop so an idle printer still comes due. Turn it on to choose which items you want on the next screen."
+        }
+      },
+      "maintenance": {
+        "title": "Printer maintenance",
+        "description": "Bambu Lab's own maintenance schedule, one task per item per printer. Intervals are pre-filled with the manufacturer's figures — change any of them, or turn an item off entirely. You can also retune an interval later on the task itself.",
+        "data": {
+          "item_linear_rods_enabled": "Clean and oil the Y/Z linear rods",
+          "item_linear_rods_interval": "Clean and oil the Y/Z linear rods — hours",
+          "item_z_lead_screws_enabled": "Grease the Z-axis lead screws",
+          "item_z_lead_screws_interval": "Grease the Z-axis lead screws — hours",
+          "item_carbon_filter_enabled": "Replace the activated carbon air filter",
+          "item_carbon_filter_interval": "Replace the activated carbon air filter — hours",
+          "item_carbon_rods_enabled": "Clean the X-axis carbon rods",
+          "item_carbon_rods_interval": "Clean the X-axis carbon rods — every",
+          "item_rod_antirust_enabled": "Anti-rust treatment on the Y/Z rods",
+          "item_rod_antirust_interval": "Anti-rust treatment on the Y/Z rods — every",
+          "item_camera_lens_enabled": "Clean the camera lens",
+          "item_camera_lens_interval": "Clean the camera lens — every",
+          "item_extruder_gear_enabled": "Check and clean the extruder gear",
+          "item_extruder_gear_interval": "Check and clean the extruder gear — every",
+          "item_toolhead_fans_enabled": "Check and clean the toolhead fans",
+          "item_toolhead_fans_interval": "Check and clean the toolhead fans — every"
+        },
+        "data_description": {
+          "item_linear_rods_interval": "Bambu Lab's figure works out to about 150 printer hours; the task also comes due every 1 months, whichever lands first.",
+          "item_z_lead_screws_interval": "Bambu Lab's figure works out to about 450 printer hours; the task also comes due every 3 months, whichever lands first.",
+          "item_carbon_filter_interval": "Bambu Lab's figure works out to about 720 printer hours; the task also comes due every 3 months, whichever lands first.",
+          "item_carbon_rods_interval": "Bambu Lab suggests every 1 months.",
+          "item_rod_antirust_interval": "Bambu Lab suggests every 3 months.",
+          "item_camera_lens_interval": "Bambu Lab suggests every 6 months.",
+          "item_extruder_gear_interval": "Bambu Lab suggests every 1 weeks.",
+          "item_toolhead_fans_interval": "Bambu Lab suggests every 1 weeks."
         }
       }
     }

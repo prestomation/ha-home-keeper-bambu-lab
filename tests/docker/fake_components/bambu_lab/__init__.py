@@ -15,11 +15,11 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall
 
 DOMAIN = "bambu_lab"
-PLATFORMS = ["update"]
+PLATFORMS = ["update", "sensor"]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    hass.data.setdefault(DOMAIN, {"entities": []})
+    hass.data.setdefault(DOMAIN, {"entities": [], "sensors": []})
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     async def _set_available(call: ServiceCall) -> None:
@@ -28,6 +28,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             ent.set_available(available)
 
     hass.services.async_register(DOMAIN, "set_firmware_available", _set_available)
+
+    async def _advance_usage(call: ServiceCall) -> None:
+        hours = float(call.data.get("hours", 1))
+        for ent in hass.data[DOMAIN].get("sensors", []):
+            ent.advance(hours)
+
+    hass.services.async_register(DOMAIN, "advance_usage_hours", _advance_usage)
     return True
 
 
