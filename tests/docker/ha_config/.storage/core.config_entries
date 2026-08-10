@@ -44,13 +44,14 @@
         "data": {},
         "options": {
           "maintenance": true,
-          "item_z_lead_screws_enabled": true,
-          "item_z_lead_screws_interval": 5,
-          "item_linear_rods_enabled": false,
-          "item_carbon_filter_enabled": false,
-          "item_carbon_rods_enabled": false,
-          "item_rod_antirust_enabled": false,
-          "item_camera_lens_enabled": false
+          "printer_E2E0001_model": "unknown",
+          "printer_E2E0001_item_z_lead_screws_enabled": true,
+          "printer_E2E0001_item_z_lead_screws_interval": 5,
+          "printer_E2E0001_item_linear_rods_enabled": false,
+          "printer_E2E0001_item_carbon_filter_enabled": false,
+          "printer_E2E0001_item_carbon_rods_enabled": false,
+          "printer_E2E0001_item_rod_antirust_enabled": false,
+          "printer_E2E0001_item_camera_lens_enabled": false
         },
         "pref_disable_new_entities": false,
         "pref_disable_polling": false,

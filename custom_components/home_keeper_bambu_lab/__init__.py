@@ -68,7 +68,9 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
         return
     for task in (resp or {}).get("tasks", []):
         src = (task.get("source") or {}).get(SOURCE_NS)
-        if isinstance(src, dict) and hass.services.has_service(HK_DOMAIN, "delete_task"):
+        if isinstance(src, dict) and hass.services.has_service(
+            HK_DOMAIN, "delete_task"
+        ):
             try:
                 await hass.services.async_call(
                     HK_DOMAIN,

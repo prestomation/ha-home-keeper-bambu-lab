@@ -46,6 +46,37 @@ export async function advanceUsageHours(
   expect(r.ok(), `advance_usage_hours(${hours}) failed: ${r.status()}`).toBeTruthy();
 }
 
+/**
+ * Open this integration's options dialog and land on its first step.
+ *
+ * The maintenance catalog is configured per printer, so the options flow is the surface
+ * where the model detection becomes the user's decision — worth driving in a real
+ * browser rather than only through the flow API. HA renders the integration page deep
+ * inside nested shadow roots; Playwright's selectors pierce them, so matching the
+ * "Configure" button by role is enough.
+ */
+export async function openOptionsFlow(page: Page): Promise<void> {
+  await page.goto('/config/integrations/integration/home_keeper_bambu_lab', {
+    waitUntil: 'domcontentloaded',
+  });
+  const configure = page.getByRole('button', { name: /^configure$/i }).first();
+  await configure.waitFor({ state: 'visible', timeout: 45_000 });
+  await configure.click();
+  // Wait on the step's own Submit button rather than the dialog element: HA's
+  // `ha-dialog` host box measures zero, so Playwright calls it hidden even while its
+  // content is on screen.
+  await page
+    .getByRole('button', { name: /^submit$/i })
+    .first()
+    .waitFor({ state: 'visible', timeout: 20_000 });
+}
+
+/** Submit the options-flow step currently on screen. */
+export async function submitFlowStep(page: Page): Promise<void> {
+  await page.getByRole('button', { name: /^submit$/i }).first().click();
+  await page.waitForTimeout(1200);
+}
+
 /** Navigate to the Home Keeper panel and wait for the custom element to upgrade. */
 export async function openPanel(page: Page): Promise<void> {
   await page.goto(PANEL_URL, { waitUntil: 'domcontentloaded' });

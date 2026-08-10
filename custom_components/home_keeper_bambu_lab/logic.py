@@ -427,24 +427,38 @@ def plan_reconcile(
 
 
 # ── maintenance catalog ──────────────────────────────────────────────────────
+def _format_item_name(item_name: str, printer_name: str) -> str:
+    """Render a catalog task's name, defensively.
+
+    Mirrors ``_format_name``'s guard on the firmware side: a printer whose
+    (user-editable) name contains a brace would otherwise raise here and drop the whole
+    catalog for that printer.
+    """
+    try:
+        return MAINTENANCE_NAME_TEMPLATE.format(
+            item_name=item_name, printer_name=printer_name
+        )
+    except (KeyError, IndexError, ValueError):
+        return f"{item_name}: {printer_name}"
+
+
 def build_catalog_task_payload(
-    item: catalog.CatalogItem,
+    resolved: catalog.ResolvedItem,
     *,
     device_id: str,
     printer_name: str,
     config_entry_id: str,
-    interval: int,
     usage_entity_id: str | None,
 ) -> dict[str, Any]:
-    """The ``home_keeper.add_task`` payload for one catalog item on one printer.
+    """The ``home_keeper.add_task`` payload for one resolved catalog item.
 
-    Two shapes, chosen by the item:
+    Two shapes, chosen by the item as resolved *for this printer's family*:
 
     * **usage** — a Home Keeper ``sensor``/``usage`` task metered against the printer's
       cumulative usage-hours entity, with the item's calendar interval as its *time
       backstop*. That pairing is the point: Bambu's own guidance is written as "every
       three months if you print about eight hours a day", which is a duty cycle, not a
-      date. A printer that sits idle still comes due on the calendar half; one that runs
+      date. A printer left unused still comes due on the calendar half; one that runs
       day and night comes due on hours long before that.
     * **time** — a plain ``floating`` task, for the items Bambu schedules by the
       calendar alone (the carbon rods carry no lubricant; anti-rust is about humidity,
@@ -458,9 +472,10 @@ def build_catalog_task_payload(
     **not** ``completion_blocked``: unlike the firmware mirror, a human does this work
     and checks it off.
     """
+    item = resolved.item
     payload: dict[str, Any] = {
         "name": _format_item_name(item.name, printer_name),
-        "notes": item.notes,
+        "notes": resolved.notes,
         "device_id": device_id,
         "source": {
             SOURCE_NS: {
@@ -478,43 +493,27 @@ def build_catalog_task_payload(
             "locked_fields": ["name", "recurrence_type", "device_id"],
         },
     }
-    if item.is_usage and usage_entity_id:
+    if resolved.is_usage and usage_entity_id:
         payload["recurrence_type"] = "sensor"
         payload["sensor"] = {
             "entity_id": usage_entity_id,
             "mode": "usage",
-            "target": interval,
+            "target": resolved.hours,
             "unit": USAGE_HOURS_UNIT,
-            "also_every": {"interval": item.interval, "unit": item.unit},
+            "also_every": {"interval": resolved.interval, "unit": resolved.unit},
             "combinator": "any",
         }
     else:
         payload["recurrence_type"] = "floating"
-        payload["interval"] = item.interval if item.is_usage else interval
-        payload["unit"] = item.unit
+        payload["interval"] = resolved.interval
+        payload["unit"] = resolved.unit
     return payload
-
-
-def _format_item_name(item_name: str, printer_name: str) -> str:
-    """Render a catalog task's name, defensively.
-
-    Mirrors ``_format_name``'s guard on the firmware side: a printer whose
-    (user-editable) name contains a brace would otherwise raise here and drop the whole
-    catalog for that printer.
-    """
-    try:
-        return MAINTENANCE_NAME_TEMPLATE.format(
-            item_name=item_name, printer_name=printer_name
-        )
-    except (KeyError, IndexError, ValueError):
-        return f"{item_name}: {printer_name}"
 
 
 def catalog_task_drift(
     task: dict,
-    item: catalog.CatalogItem,
+    resolved: catalog.ResolvedItem,
     *,
-    interval: int,
     usage_entity_id: str | None,
 ) -> dict[str, Any] | None:
     """Fields to push onto an existing catalog task, or ``None`` if it already matches.
@@ -524,14 +523,14 @@ def catalog_task_drift(
     must survive a reconcile untouched.
     """
     updates: dict[str, Any] = {}
-    if item.is_usage and usage_entity_id:
+    if resolved.is_usage and usage_entity_id:
         current = task.get("sensor") or {}
         desired = {
             "entity_id": usage_entity_id,
             "mode": "usage",
-            "target": float(interval),
+            "target": float(resolved.hours or 0),
             "unit": USAGE_HOURS_UNIT,
-            "also_every": {"interval": item.interval, "unit": item.unit},
+            "also_every": {"interval": resolved.interval, "unit": resolved.unit},
             "combinator": "any",
         }
         comparable = {
@@ -541,15 +540,13 @@ def catalog_task_drift(
         }
         if comparable != desired:
             updates["sensor"] = desired
-    elif not (item.is_usage and usage_entity_id):
-        wanted_interval = item.interval if item.is_usage else interval
-        if int(task.get("interval") or 0) != wanted_interval or (
-            task.get("unit") != item.unit
-        ):
-            updates["interval"] = wanted_interval
-            updates["unit"] = item.unit
-    if (task.get("notes") or "") != item.notes:
-        updates["notes"] = item.notes
+    elif int(task.get("interval") or 0) != resolved.interval or (
+        task.get("unit") != resolved.unit
+    ):
+        updates["interval"] = resolved.interval
+        updates["unit"] = resolved.unit
+    if (task.get("notes") or "") != resolved.notes:
+        updates["notes"] = resolved.notes
     return updates or None
 
 
@@ -563,12 +560,15 @@ def plan_catalog(
 ) -> list[Action]:
     """Converge every catalog task for every known printer.
 
-    *printers* maps ``device_id`` → ``{"name": ..., "usage_entity_id": ... | None}``.
+    *printers* maps ``device_id`` → ``{"name", "serial", "model", "usage_entity_id"}``.
+    Each printer's family is resolved from the user's override if there is one and the
+    detected model otherwise, and that family decides which items apply and on what
+    interval — an A1 has no chamber filter and no X-axis carbon rods, so it gets neither.
 
     Creates a task for each enabled item on each printer, refreshes one that has drifted
-    (the user changed an interval in the options flow), and deletes the tasks of items
-    that were turned off — including every catalog task when the whole feature is
-    switched off, which is what makes the master toggle safe to flip back and forth.
+    (the user changed an interval or corrected the model), and deletes the tasks of items
+    that no longer apply — including every catalog task when the feature is switched
+    off, which is what makes the master toggle safe to flip back and forth.
 
     Firmware tasks are untouched: they are matched by their own ``item`` key, so the two
     planners never see each other's tasks.
@@ -580,32 +580,30 @@ def plan_catalog(
         for device_id, info in printers.items():
             usage_entity_id = info.get("usage_entity_id")
             printer_name = info.get("name") or device_id
-            for item in catalog.CATALOG:
-                item_enabled, interval = catalog.resolve(item, options)
-                if not item_enabled:
+            serial = str(info.get("serial") or "")
+            family = catalog.resolved_family(serial, info.get("model"), options)
+            for resolved in catalog.resolve_all(family, serial, options):
+                if not resolved.enabled:
                     continue
-                wanted.add((device_id, item.key))
-                existing = task_for_device(tasks, device_id, item.key)
+                item_key = resolved.item.key
+                wanted.add((device_id, item_key))
+                existing = task_for_device(tasks, device_id, item_key)
                 if existing is None:
                     actions.append(
                         CreateTask(
                             device_id,
                             build_catalog_task_payload(
-                                item,
+                                resolved,
                                 device_id=device_id,
                                 printer_name=printer_name,
                                 config_entry_id=config_entry_id,
-                                interval=interval,
                                 usage_entity_id=usage_entity_id,
                             ),
                         )
                     )
                     continue
                 drift = catalog_task_drift(
-                    existing,
-                    item,
-                    interval=interval,
-                    usage_entity_id=usage_entity_id,
+                    existing, resolved, usage_entity_id=usage_entity_id
                 )
                 if drift is not None:
                     actions.append(UpdateTask(existing["id"], device_id, fields=drift))

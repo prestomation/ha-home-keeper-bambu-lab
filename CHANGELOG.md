@@ -30,6 +30,28 @@ versioning (with PEP 440 pre-release suffixes — `bN`/`aN`/`rcN` — for betas)
   Needs Home Keeper 0.12.0 for the hours-or-calendar behaviour. Against an older version
   the tasks still work as plain meters.
 
+- **The maintenance items are enabled per printer model.** Bambu Lab's schedule is not
+  the same for every printer, so the glue reads each printer's model from the Bambu Lab
+  integration and turns on the items that apply to it. An A1 is open-frame with no
+  X-axis carbon rods, so it no longer gets an air-filter or carbon-rod task, while an X1C
+  in the same house still gets both. The X1's *"never grease the carbon rods"* note is
+  likewise replaced with *"apply lubricating oil"* on the P2S and H2, whose X-axis shafts
+  are meant to be oiled.
+
+  Detection only decides the defaults. Every item is listed for every printer, and the
+  detected model is a dropdown you can overrule, so a printer we do not recognise —
+  including whatever Bambu ships next — is still fully configurable: pick **Other / not
+  listed** and tick what your machine has. An unrecognised printer starts with the items
+  every Bambu Lab printer shares and nothing model-specific. Correcting a model
+  re-applies that model's defaults rather than keeping answers you gave about a
+  different machine.
+
+  Turning maintenance on now walks you through your printers one at a time: pick a
+  printer (skipped if you only have one), confirm or correct its model, then tick its
+  items. Options are stored per printer, keyed on the printer's serial; the flat keys
+  from the `0.2.0.dev6` preview are still read as a fallback, so preview testers keep
+  their answers.
+
 ### Fixed
 
 - **A single firmware install no longer records two completions.** A printer's

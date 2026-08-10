@@ -23,16 +23,33 @@
           "maintenance": "Create Home Keeper tasks for Bambu Lab's published maintenance schedule — lead-screw greasing, rod cleaning, the air filter and so on. The ones measured in printer hours are metered against the printer's usage-hours sensor, with a calendar backstop so an idle printer still comes due. Turn it on to choose which items you want on the next screen."
         }
       },
-      "maintenance": {
-        "title": "Printer maintenance",
-        "description": "Bambu Lab's own maintenance schedule, one task per item per printer. Intervals are pre-filled with the manufacturer's figures — change any of them, or turn an item off entirely. You can also retune an interval later on the task itself.",
+      "select_printer": {
+        "title": "Choose a printer",
+        "description": "Bambu Lab publishes a different schedule for each printer series, so your printers are set up one at a time. Pick one to configure and you will come back here afterwards for the next. Choose Save and finish when you are done.",
         "data": {
-          "item_linear_rods_enabled": "Clean and oil the Y/Z linear rods",
-          "item_linear_rods_interval": "Clean and oil the Y/Z linear rods — hours",
+          "printer": "Printer"
+        }
+      },
+      "model": {
+        "title": "Printer model",
+        "description": "Setting up {printer_name}. Detected model: {detected}. The model decides which maintenance items start switched on and what their intervals are pre-filled with. Nothing else depends on it, so pick another series if the detection is wrong, or Other if your printer is not listed.",
+        "data": {
+          "model": "Maintenance schedule to follow"
+        },
+        "data_description": {
+          "model": "Pre-filled with what we read from the printer. Other leaves only the items every Bambu Lab printer has switched on, and you tick the rest yourself on the next screen."
+        }
+      },
+      "items": {
+        "title": "Printer maintenance",
+        "description": "Bambu Lab's maintenance schedule for {printer_name}, one task per item. Defaults come from the {model} schedule. Every item is listed, whatever the printer, so you can add one we did not tick. Intervals are pre-filled with the manufacturer's figures. Change any of them, or turn an item off. You can also retune an interval later on the task itself.",
+        "data": {
+          "item_linear_rods_enabled": "Clean and oil the linear rods",
+          "item_linear_rods_interval": "Clean and oil the linear rods — every",
           "item_z_lead_screws_enabled": "Grease the Z-axis lead screws",
-          "item_z_lead_screws_interval": "Grease the Z-axis lead screws — hours",
+          "item_z_lead_screws_interval": "Grease the Z-axis lead screws — every",
           "item_carbon_filter_enabled": "Replace the activated carbon air filter",
-          "item_carbon_filter_interval": "Replace the activated carbon air filter — hours",
+          "item_carbon_filter_interval": "Replace the activated carbon air filter — every",
           "item_carbon_rods_enabled": "Clean the X-axis carbon rods",
           "item_carbon_rods_interval": "Clean the X-axis carbon rods — every",
           "item_rod_antirust_enabled": "Anti-rust treatment on the Y/Z rods",
@@ -45,14 +62,14 @@
           "item_toolhead_fans_interval": "Check and clean the toolhead fans — every"
         },
         "data_description": {
-          "item_linear_rods_interval": "Bambu Lab's figure works out to about 150 printer hours; the task also comes due every 1 months, whichever lands first.",
-          "item_z_lead_screws_interval": "Bambu Lab's figure works out to about 450 printer hours; the task also comes due every 3 months, whichever lands first.",
-          "item_carbon_filter_interval": "Bambu Lab's figure works out to about 720 printer hours; the task also comes due every 3 months, whichever lands first.",
-          "item_carbon_rods_interval": "Bambu Lab suggests every 1 months.",
-          "item_rod_antirust_interval": "Bambu Lab suggests every 3 months.",
-          "item_camera_lens_interval": "Bambu Lab suggests every 6 months.",
-          "item_extruder_gear_interval": "Bambu Lab suggests every 1 weeks.",
-          "item_toolhead_fans_interval": "Bambu Lab suggests every 1 weeks."
+          "item_linear_rods_interval": "About 150 printer hours, which is Bambu Lab's monthly check at five hours a day. A monthly calendar backstop applies as well, whichever lands first.",
+          "item_z_lead_screws_interval": "About 450 printer hours, which is Bambu Lab's quarterly service at five hours a day. A quarterly calendar backstop applies as well, whichever lands first.",
+          "item_carbon_filter_interval": "About 720 printer hours, which is Bambu Lab's three months of eight-hour days. A quarterly calendar backstop applies as well, whichever lands first.",
+          "item_carbon_rods_interval": "Bambu Lab suggests monthly. Only the X1 and P1 series use carbon rods on the X axis.",
+          "item_rod_antirust_interval": "Bambu Lab suggests quarterly, on the X1 and P1 series.",
+          "item_camera_lens_interval": "Bambu Lab suggests every six months. The A1 series ships without a camera.",
+          "item_extruder_gear_interval": "Bambu Lab suggests weekly. Off by default on every model, because weekly is a lot of reminders unless the printer runs most days.",
+          "item_toolhead_fans_interval": "Bambu Lab suggests weekly, and it is off by default for the same reason as the extruder gear check."
         }
       }
     }

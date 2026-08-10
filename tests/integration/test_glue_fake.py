@@ -63,17 +63,25 @@ def _make_bambu_update(
     serial: str,
     state: str,
     name: str = "X1 Carbon",
+    model: str | None = None,
     latest_version: str | None = "01.08.02.00",
     installed_version: str | None = "01.07.00.00",
     release_url: str | None = "https://bambulab.com/release",
 ) -> tuple[str, str]:
-    """Register a Bambu Lab firmware update entity in *state*; return (device_id, entity_id)."""
+    """Register a Bambu Lab firmware update entity in *state*; return (device_id, entity_id).
+
+    *model* stands in for what ha-bambulab writes to the device registry — its raw
+    ``device_type`` (``X1C``, ``A1MINI``, …) — which is what the maintenance catalog
+    detects the printer from. Left unset, the printer is unrecognised, which is itself
+    a case worth covering.
+    """
     bambu_entry = MockConfigEntry(domain=BAMBU_DOMAIN, data={})
     bambu_entry.add_to_hass(hass)
     device = dr.async_get(hass).async_get_or_create(
         config_entry_id=bambu_entry.entry_id,
         identifiers={(BAMBU_DOMAIN, serial)},
         name=name,
+        model=model,
     )
     ent = er.async_get(hass).async_get_or_create(
         "update",
@@ -492,3 +500,111 @@ async def test_catalog_and_firmware_tasks_coexist(hass: HomeAssistant) -> None:
     assert len(firmware) == 1
     assert firmware[0]["next_due"]  # still armed by the update entity
     assert len(_catalog_tasks(hk)) == 1
+
+
+# ── per-model gating ─────────────────────────────────────────────────────────
+def _items_by_device(hk) -> dict[str, set[str]]:
+    """device_id → the catalog item keys that printer currently has tasks for."""
+    out: dict[str, set[str]] = {}
+    for task in _catalog_tasks(hk):
+        src = task["source"][DOMAIN]
+        out.setdefault(src["device_id"], set()).add(src["item"])
+    return out
+
+
+async def test_a_mixed_fleet_gets_the_right_items_per_printer(
+    hass: HomeAssistant,
+) -> None:
+    # The whole point of the family map: one house, two printers, two schedules. The A1
+    # has no chamber filter and no X-axis carbon rods, so it must not be told to service
+    # them — while the X1C in the same house is.
+    hk = await async_setup_fake_home_keeper(hass)
+    x1c, _ = _make_bambu_update(
+        hass, serial="X1C910", state="off", name="Workshop X1C", model="X1C"
+    )
+    a1, _ = _make_bambu_update(
+        hass, serial="A1M910", state="off", name="Desk A1 mini", model="A1MINI"
+    )
+    _make_usage_hours_sensor(hass, serial="X1C910", device_id=x1c)
+    _make_usage_hours_sensor(hass, serial="A1M910", device_id=a1)
+    await _setup_glue_with_options(hass, {"maintenance": True})
+
+    items = _items_by_device(hk)
+    assert "carbon_filter" in items[x1c]
+    assert "carbon_rods" in items[x1c]
+    assert "carbon_filter" not in items[a1]
+    assert "carbon_rods" not in items[a1]
+    # Both still get the parts every Bambu Lab printer has.
+    assert {"linear_rods", "z_lead_screws"} <= items[a1]
+    assert {"linear_rods", "z_lead_screws"} <= items[x1c]
+
+
+async def test_an_unrecognised_printer_gets_the_universal_items_only(
+    hass: HomeAssistant,
+) -> None:
+    # A printer Bambu Lab ships next year reports a model we've never heard of. It must
+    # still be set up, with the items every printer shares and nothing model-specific.
+    hk = await async_setup_fake_home_keeper(hass)
+    device_id, _ = _make_bambu_update(
+        hass, serial="NEW910", state="off", name="Mystery", model="Z9ULTRA"
+    )
+    _make_usage_hours_sensor(hass, serial="NEW910", device_id=device_id)
+    await _setup_glue_with_options(hass, {"maintenance": True})
+
+    assert _items_by_device(hk)[device_id] == {
+        "linear_rods",
+        "z_lead_screws",
+        "camera_lens",
+    }
+
+
+async def test_overruling_the_detected_model_changes_the_task_set(
+    hass: HomeAssistant,
+) -> None:
+    # Detected as an X1C, actually an A1 (a re-flashed board, a wrong device_type, or
+    # simply a model we mapped wrong). Correcting it in the options must converge the
+    # tasks on the next reconcile, not just change future ones.
+    hk = await async_setup_fake_home_keeper(hass)
+    serial = "X1C911"
+    device_id, _ = _make_bambu_update(
+        hass, serial=serial, state="off", name="Actually an A1", model="X1C"
+    )
+    _make_usage_hours_sensor(hass, serial=serial, device_id=device_id)
+    entry = await _setup_glue_with_options(hass, {"maintenance": True})
+    assert "carbon_filter" in _items_by_device(hk)[device_id]
+
+    hass.config_entries.async_update_entry(
+        entry,
+        options={
+            **entry.options,
+            f"printer_{serial}_model": "A1",
+        },
+    )
+    await hass.async_block_till_done()
+
+    items = _items_by_device(hk)[device_id]
+    assert "carbon_filter" not in items
+    assert "carbon_rods" not in items
+    assert {"linear_rods", "z_lead_screws"} <= items
+
+
+async def test_per_printer_options_do_not_leak_between_printers(
+    hass: HomeAssistant,
+) -> None:
+    hk = await async_setup_fake_home_keeper(hass)
+    first, _ = _make_bambu_update(
+        hass, serial="X1C912", state="off", name="One", model="X1C"
+    )
+    second, _ = _make_bambu_update(
+        hass, serial="X1C913", state="off", name="Two", model="X1C"
+    )
+    await _setup_glue_with_options(
+        hass,
+        {
+            "maintenance": True,
+            "printer_X1C912_item_carbon_filter_enabled": False,
+        },
+    )
+    items = _items_by_device(hk)
+    assert "carbon_filter" not in items[first]
+    assert "carbon_filter" in items[second]

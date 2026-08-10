@@ -53,6 +53,87 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 
+def is_firmware_entity(entity: er.RegistryEntry) -> bool:
+    """Whether *entity* is a Bambu Lab firmware entity (``update`` or ``binary_sensor``).
+
+    The Bambu Lab integration exposes firmware as an ``update`` entity or, when its
+    "Firmware update" option is off (the default), a ``binary_sensor`` with device_class
+    ``update`` — both keyed ``{serial}_firmware_update``. We accept either; for the
+    binary_sensor we also require the ``update`` device_class so we don't pick up an
+    unrelated binary_sensor that happens to share the suffix.
+    """
+    if entity.platform != BAMBU_DOMAIN:
+        return False
+    if entity.domain not in FIRMWARE_DOMAINS:
+        return False
+    if not (entity.unique_id or "").endswith(UPDATE_UNIQUE_SUFFIX):
+        return False
+    if entity.domain == BINARY_SENSOR_DOMAIN:
+        device_class = entity.device_class or entity.original_device_class
+        return device_class == FIRMWARE_BINARY_DEVICE_CLASS
+    return True
+
+
+def is_usage_hours_entity(entity: er.RegistryEntry) -> bool:
+    """Whether *entity* is a Bambu Lab printer's cumulative usage-hours sensor.
+
+    Matched the same way as the firmware entity — ``bambu_lab`` platform plus a
+    unique_id suffix — because ``BambuLabSensor`` composes its unique_id as
+    ``f"{serial}_{description.key}"``, and ``total_usage_hours`` is the key.
+    """
+    return (
+        entity.platform == BAMBU_DOMAIN
+        and entity.domain == SENSOR_DOMAIN
+        and (entity.unique_id or "").endswith(USAGE_HOURS_UNIQUE_SUFFIX)
+    )
+
+
+def scan_printers(hass: HomeAssistant) -> dict[str, dict[str, Any]]:
+    """Every Bambu Lab printer device we can see, with the facts the catalog needs.
+
+    Keyed off the *firmware* entity rather than the usage sensor, because that is the
+    one entity every supported printer has — a printer whose model doesn't report
+    ``info.usage_hours`` still gets its calendar-based maintenance tasks, just without
+    the hours half.
+
+    Each entry, keyed by ``device_id``, carries:
+
+    * ``name`` — the device's display name (a user rename wins), entity id as a fallback;
+    * ``serial`` — the printer's serial, which is the firmware entity's ``unique_id``
+      minus :data:`~.const.UPDATE_UNIQUE_SUFFIX`. Maintenance options are keyed on this
+      rather than on ``device_id`` because it survives the device registry entry being
+      recreated;
+    * ``model`` — the device registry's model, which Bambu Lab sets to the raw
+      ``device_type`` (a ``pybambu.const.Printers`` value such as ``X1C``). Fed to
+      :func:`catalog.resolved_family` as the *detected* model, which the user can
+      overrule per printer in the options flow;
+    * ``usage_entity_id`` — the cumulative usage-hours sensor, or ``None``.
+
+    Shared with the options flow, which needs the same view to offer a printer picker.
+    """
+    ent_reg = er.async_get(hass)
+    dev_reg = dr.async_get(hass)
+    usage_by_device: dict[str, str] = {}
+    printers: dict[str, dict[str, Any]] = {}
+    for entity in ent_reg.entities.values():
+        if not entity.device_id:
+            continue
+        if is_usage_hours_entity(entity):
+            usage_by_device[entity.device_id] = entity.entity_id
+        elif is_firmware_entity(entity):
+            device = dev_reg.async_get(entity.device_id)
+            name = (device.name_by_user or device.name) if device else None
+            unique_id = entity.unique_id or ""
+            printers[entity.device_id] = {
+                "name": name or entity.entity_id,
+                "serial": unique_id[: -len(UPDATE_UNIQUE_SUFFIX)],
+                "model": (device.model or "") if device else "",
+            }
+    for device_id, info in printers.items():
+        info["usage_entity_id"] = usage_by_device.get(device_id)
+    return printers
+
+
 class BambuLabGlue:
     """Watches Bambu Lab firmware update entities and drives Home Keeper tasks."""
 
@@ -158,48 +239,13 @@ class BambuLabGlue:
             _LOGGER.debug("Home Keeper companion registration failed", exc_info=True)
 
     # ── entity tracking ──────────────────────────────────────────────────────
-    @staticmethod
-    def _is_firmware_entity(entity: er.RegistryEntry) -> bool:
-        """Whether *entity* is a Bambu Lab firmware entity (``update`` or ``binary_sensor``).
-
-        The Bambu Lab integration exposes firmware as an ``update`` entity or, when its
-        "Firmware update" option is off (the default), a ``binary_sensor`` with
-        device_class ``update`` — both keyed ``{serial}_firmware_update``. We accept
-        either; for the binary_sensor we also require the ``update`` device_class so we
-        don't pick up an unrelated binary_sensor that happens to share the suffix.
-        """
-        if entity.platform != BAMBU_DOMAIN:
-            return False
-        if entity.domain not in FIRMWARE_DOMAINS:
-            return False
-        if not (entity.unique_id or "").endswith(UPDATE_UNIQUE_SUFFIX):
-            return False
-        if entity.domain == BINARY_SENSOR_DOMAIN:
-            device_class = entity.device_class or entity.original_device_class
-            return device_class == FIRMWARE_BINARY_DEVICE_CLASS
-        return True
-
-    @staticmethod
-    def _is_usage_hours_entity(entity: er.RegistryEntry) -> bool:
-        """Whether *entity* is a Bambu Lab printer's cumulative usage-hours sensor.
-
-        Matched the same way as the firmware entity — ``bambu_lab`` platform plus a
-        unique_id suffix — because ``BambuLabSensor`` composes its unique_id as
-        ``f"{serial}_{description.key}"``, and ``total_usage_hours`` is the key.
-        """
-        return (
-            entity.platform == BAMBU_DOMAIN
-            and entity.domain == SENSOR_DOMAIN
-            and (entity.unique_id or "").endswith(USAGE_HOURS_UNIQUE_SUFFIX)
-        )
-
     def _bambu_update_entity_ids(self) -> frozenset[str]:
         """Every Bambu Lab firmware entity id, from the entity registry."""
         ent_reg = er.async_get(self.hass)
         return frozenset(
             entity.entity_id
             for entity in ent_reg.entities.values()
-            if self._is_firmware_entity(entity)
+            if is_firmware_entity(entity)
         )
 
     @callback
@@ -394,7 +440,7 @@ class BambuLabGlue:
             # Keeper's own watcher does the arming from then on.
             actions += logic.plan_catalog(
                 tasks,
-                self._scan_printers(),
+                scan_printers(self.hass),
                 config_entry_id=self.entry.entry_id,
                 enabled=self._maintenance_enabled,
                 options=dict(self.entry.options),
@@ -403,31 +449,6 @@ class BambuLabGlue:
                 await self._execute(action)
             if actions:
                 _LOGGER.debug("Reconcile applied %d action(s)", len(actions))
-
-    def _scan_printers(self) -> dict[str, dict[str, Any]]:
-        """Every Bambu Lab printer device we can see, with its usage-hours entity.
-
-        Keyed off the *firmware* entity rather than the usage sensor, because that is the
-        one entity every supported printer has — a printer whose firmware whose model
-        doesn't report ``info.usage_hours`` still gets its calendar-based maintenance
-        tasks, just without the hours half.
-        """
-        ent_reg = er.async_get(self.hass)
-        dev_reg = dr.async_get(self.hass)
-        usage_by_device: dict[str, str] = {}
-        printers: dict[str, dict[str, Any]] = {}
-        for entity in ent_reg.entities.values():
-            if not entity.device_id:
-                continue
-            if self._is_usage_hours_entity(entity):
-                usage_by_device[entity.device_id] = entity.entity_id
-            elif self._is_firmware_entity(entity):
-                device = dev_reg.async_get(entity.device_id)
-                name = (device.name_by_user or device.name) if device else None
-                printers[entity.device_id] = {"name": name or entity.entity_id}
-        for device_id, info in printers.items():
-            info["usage_entity_id"] = usage_by_device.get(device_id)
-        return printers
 
     def _scan_updates(self) -> tuple[dict[str, dict[str, Any]], dict[str, Any]]:
         """Snapshot Bambu Lab's firmware update entities for a reconcile.
@@ -443,7 +464,7 @@ class BambuLabGlue:
         available: dict[str, dict[str, Any]] = {}
         up_to_date: dict[str, Any] = {}
         for entity in ent_reg.entities.values():
-            if not self._is_firmware_entity(entity) or not entity.device_id:
+            if not is_firmware_entity(entity) or not entity.device_id:
                 continue
             state = self.hass.states.get(entity.entity_id)
             if state is None:

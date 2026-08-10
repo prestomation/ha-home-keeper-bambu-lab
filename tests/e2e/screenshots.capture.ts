@@ -9,7 +9,13 @@
  * the maintenance catalog's usage task coming due as the printer's hours climb.
  */
 import { test, expect, Page } from '@playwright/test';
-import { advanceUsageHours, openPanel, setFirmwareAvailable } from './tests/helpers';
+import {
+  advanceUsageHours,
+  openOptionsFlow,
+  openPanel,
+  setFirmwareAvailable,
+  submitFlowStep,
+} from './tests/helpers';
 
 const OUT = process.env.SHOT_DIR || '/tmp/glue-shots';
 const PRINTER_NAME = 'X1 Carbon';
@@ -95,4 +101,32 @@ test('capture the maintenance catalog', async ({ page, request }) => {
   await expect(panel.locator('.hk-meter').first()).toBeVisible();
   await page.waitForTimeout(600);
   await page.screenshot({ path: `${OUT}/flow-4-maintenance-detail.png`, fullPage: true });
+});
+
+test('capture the per-printer options flow', async ({ page }) => {
+  // The argument for the per-model design is visual: every item listed for every
+  // printer, with only the ones this model actually has ticked. One printer in the
+  // container, so the picker is skipped and we land straight on the model step.
+  await openOptionsFlow(page);
+  await submitFlowStep(page); // init: keep the name template, maintenance already on
+  await expect(page.getByText(/detected model/i).first()).toBeVisible();
+
+  // Pick the X1 series. The container is seeded as an unrecognised printer, so this is
+  // the "correct the model" path — which is also why the items step then shows that
+  // family's clean defaults instead of the container's saved answers.
+  await page.locator('ha-select').first().click();
+  await page
+    .locator('ha-dropdown-item', { hasText: /X1 series/i })
+    .first()
+    .click();
+  await page.waitForTimeout(500);
+  await page.screenshot({ path: `${OUT}/flow-5-options-model.png` });
+
+  // The items step is a long scrolling form; a tall viewport gets several items into
+  // one shot instead of two-and-a-half.
+  await page.setViewportSize({ width: 1280, height: 1500 });
+  await submitFlowStep(page);
+  await expect(page.getByText(/activated carbon air filter/i).first()).toBeVisible();
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: `${OUT}/flow-6-options-items.png` });
 });

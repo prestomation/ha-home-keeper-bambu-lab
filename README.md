@@ -101,16 +101,35 @@ such signal, so this is the one place the glue holds an opinion. Turn on **Also 
 printer maintenance tasks** in the options and it creates a Home Keeper task per item
 per printer, following **Bambu Lab's own published schedule**.
 
-| Item | Interval | On by default |
+| Item | Interval | On by default for |
 |---|---|---|
-| Clean and oil the Y/Z linear rods | 150 printer hours, or 1 month | yes |
-| Grease the Z-axis lead screws | 450 printer hours, or 3 months | yes |
-| Replace the activated carbon air filter | 720 printer hours, or 3 months | yes |
-| Clean the X-axis carbon rods | 1 month | yes |
-| Anti-rust treatment on the Y/Z rods | 3 months | yes |
-| Clean the camera lens | 6 months | yes |
-| Check and clean the extruder gear | 1 week | no |
-| Check and clean the toolhead fans | 1 week | no |
+| Clean and oil the linear rods | 150 printer hours, or 1 month | every printer |
+| Grease the Z-axis lead screws | 450 printer hours, or 3 months | every printer |
+| Replace the activated carbon air filter | 720 printer hours, or 3 months | X1, P1S, P2S/X2D, H2 |
+| Clean the X-axis carbon rods | 1 month | X1, P1P, P1S |
+| Anti-rust treatment on the Y/Z rods | 3 months | X1, P1P, P1S |
+| Clean the camera lens | 6 months | every printer but the A1 |
+| Check and clean the extruder gear | 1 week | nothing |
+| Check and clean the toolhead fans | 1 week | nothing |
+
+**Items are enabled per model.** Bambu Lab's schedule is not the same for every printer,
+so the glue reads each printer's model from the Bambu Lab integration and turns on the
+items that actually apply. An A1 has no enclosure and no X-axis carbon rods, so it gets
+neither the air filter nor the carbon-rod task, while an X1C in the same house gets both.
+When you turn maintenance on, the options walk you through your printers one at a time:
+confirm (or correct) the model, then tick the items.
+
+Detection only decides the **defaults**. Every item is listed for every printer, so a
+model we do not recognise — including whatever Bambu ships next — is still fully
+configurable: pick **Other / not listed** and tick what your machine has. An
+unrecognised printer starts with the items every Bambu Lab printer shares (linear rods,
+lead screws, camera) and nothing model-specific, because a reminder to service a part
+you do not have is worse than no reminder. Correcting the model re-applies that model's
+defaults, so *"actually it's an A1"* does what you mean.
+
+![The model step: "Detected model: X1C", with a dropdown of printer series to confirm or correct it](docs/images/flow-5-options-model.png)
+
+![The items step: every maintenance item with a toggle and an interval, pre-filled from the X1 series schedule](docs/images/flow-6-options-items.png)
 
 **Why two numbers.** Bambu's guidance is written as a duty cycle, not a date: the X1 wiki
 says to change the air filter *"every three months if the printer is used for about 8

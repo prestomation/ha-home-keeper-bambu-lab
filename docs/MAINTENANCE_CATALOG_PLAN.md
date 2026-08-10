@@ -52,23 +52,103 @@ running 24/7 and quarterly for a hobby printer, which is what the wiki says in p
 Each row's hours figure is the wiki's duty-cycle rule turned into arithmetic; the
 derivation is in a comment on the item in `catalog.py`.
 
-| Key | Item | Hours | Calendar | Default | Source |
+| Key | Item | Hours | Calendar | On for | Source |
 |---|---|---|---|---|---|
-| `linear_rods` | Clean and oil the Y/Z linear rods | 150 | 1 month | on | [P2S][p2s] (5 h/day × 30 d), [X1][x1] ("checked once a month") |
-| `z_lead_screws` | Grease the Z-axis lead screws | 450 | 3 months | on | [X1][x1] ("greased every three months"), [P2S][p2s] (5 h/day × 90 d) |
-| `carbon_filter` | Replace the activated carbon air filter | 720 | 3 months | on | [X1][x1] (8 h/day × 90 d; "every month" for a production machine falls out of the hours half) |
-| `carbon_rods` | Clean the X-axis carbon rods | — | 1 month | on | [X1][x1] ("checked once a month"; no lubricant, so no hours figure) |
-| `rod_antirust` | Anti-rust treatment on the Y/Z rods | — | 3 months | on | [X1][x1] ("anti-rust every three months") |
-| `camera_lens` | Clean the camera lens | — | 6 months | on | [P2S][p2s] ("clean the camera every 6 months") |
-| `extruder_gear` | Check and clean the extruder gear | — | 1 week | **off** | [X1][x1] ("once a week") |
-| `toolhead_fans` | Check and clean the toolhead fans | — | 1 week | **off** | [X1][x1] ("checking the fans every week") |
+| `linear_rods` | Clean and oil the linear rods | 150 | 1 month | every printer | [P2S][p2s] (5 h/day × 30 d), [X1][x1] ("checked once a month") |
+| `z_lead_screws` | Grease the Z-axis lead screws | 450 | 3 months | every printer | [X1][x1] ("greased every three months"), [P2S][p2s] (5 h/day × 90 d) |
+| `carbon_filter` | Replace the activated carbon air filter | 720 | 3 months | X1, P1S, P2, H2 | [X1][x1] (8 h/day × 90 d; "every month" for a production machine falls out of the hours half) |
+| `carbon_rods` | Clean the X-axis carbon rods | — | 1 month | X1, P1P, P1S | [X1][x1] ("checked once a month"; no lubricant, so no hours figure) |
+| `rod_antirust` | Anti-rust treatment on the Y/Z rods | — | 3 months | X1, P1P, P1S | [X1][x1] ("anti-rust every three months") |
+| `camera_lens` | Clean the camera lens | — | 6 months | every printer but the A1 | [P2S][p2s] ("clean the camera every 6 months") |
+| `extruder_gear` | Check and clean the extruder gear | — | 1 week | **nothing** | [X1][x1] ("once a week") |
+| `toolhead_fans` | Check and clean the toolhead fans | — | 1 week | **nothing** | [X1][x1] ("checking the fans every week") |
 
 [x1]: https://wiki.bambulab.com/en/x1/maintenance/basic-maintenance
 [p2s]: https://wiki.bambulab.com/en/p2s/maintenance/period-maintenance
 
-The two weekly items ship **off**. They are real recommendations, but a weekly reminder
-per printer is a lot of noise unless the machine runs most days, and a catalog that
-nags is a catalog people switch off entirely.
+The two weekly items ship **off** on every model. They are real recommendations, but a
+weekly reminder per printer is a lot of noise unless the machine runs most days, and a
+catalog that nags is a catalog people switch off entirely.
+
+## The schedule is not the same for every printer
+
+The first cut of this catalog applied all eight items to every printer, which is wrong
+for half the range. An A1 is an open-frame bed-slinger: no enclosure, so no activated
+carbon filter, and no X-axis carbon rods either. Telling its owner to service two parts
+the machine does not have is worse than telling them nothing, because it teaches people
+to ignore the list.
+
+There is a subtler error in the same direction. `carbon_rods` says *"never grease them"*,
+which is right for the X1 and P1's bare carbon rods — and exactly backwards for the P2S
+and H2, whose X-axis **shafts are meant to be oiled**. Same axis, opposite instruction.
+
+So each item carries per-family overrides (`catalog.ModelOverride`), layered
+**item baseline → family override → the user's stored option**. An override can flip
+`enabled`, retune `hours`/`interval`/`unit`, rewrite the `notes`, or cite a different
+`source` — which is what lets one item cover both the "never grease" and the "apply oil"
+case without forking it in two.
+
+### Families
+
+Bambu publishes one maintenance page per *series*, so families are the useful
+granularity. `ha-bambulab` writes its raw `device_type` (a `pybambu.const.Printers`
+value) to the device registry's `model`, and `catalog.normalize_family` maps it:
+
+| Family | Models | Evidence |
+|---|---|---|
+| `X1` | X1, X1C, X1E | [X1 maintenance][x1]. X1E has no page of its own; same chassis. |
+| `P1P` | P1P | [P1 series page][p1]. Open frame, so no chamber filter. |
+| `P1S` | P1S | Same page, but the P1S is the enclosed variant and takes a filter. |
+| `P2` | P2S, X2D | [P2S maintenance][p2s]; the two share an [air-filter guide][p2filter]. |
+| `A1` | A1, A1MINI | [A1 maintenance][a1]. Dual Z lead screws, no camera in the box. |
+| `H2` | H2C, H2D, H2DPRO, H2S | [H2 maintenance][h2]. Only the H2D has a page; the rest are the same chassis. |
+| `unknown` | A2L, anything Bambu ships next | No page found. |
+
+[p1]: https://wiki.bambulab.com/en/p1/maintenance/p1p-maintenance
+[a1]: https://wiki.bambulab.com/en/a1/maintenance/basic-maintenance
+[h2]: https://wiki.bambulab.com/en/h2/maintenance/period-maintenance
+[p2filter]: https://wiki.bambulab.com/en/p2s/maintenance/replace-air-filter
+
+The P1P/P1S split is the one place a family is finer than a wiki page. The combined P1
+page never mentions the activated carbon filter, but the P1S is the enclosed variant and
+has one; rather than guess which way the page's silence cuts, the enclosed model gets the
+filter and the open-frame one doesn't.
+
+`tests/docker/test_end_to_end.py` asserts that **every** member of the real
+`pybambu.const.Printers` enum appears in the family map. When Bambu ships a new printer,
+that is a CI failure with the model's name in it, not a silent fallback.
+
+### Detection only drives defaults
+
+The model is never a gate. Three rules follow from that, and they are the whole design:
+
+1. **Every item is always offered.** The options flow lists all eight for every printer,
+   including one it does not recognise. The family decides which start ticked and what
+   the intervals are pre-filled with, and nothing else.
+2. **The user can overrule the detection.** The `model` step is pre-filled with what we
+   read from the device and is a plain dropdown of the families plus *Other / not
+   listed*. A printer that reports a `device_type` we have never seen is still one pick
+   away from the right schedule.
+3. **An unrecognised printer still gets the universal items.** `linear_rods`,
+   `z_lead_screws` and `camera_lens` exist on everything Bambu makes, so those ship on
+   for `unknown` too; the model-specific items ship off, because a reminder to service a
+   part you do not have is the failure mode this section opens with.
+
+### Options are per printer
+
+Model gating is inherently per printer: an X1C and an A1 mini in one house need
+different answers, which the first beta's flat `item_<key>_enabled` could not express.
+Keys are now `printer_<serial>_model`, `printer_<serial>_item_<key>_enabled` and
+`printer_<serial>_item_<key>_interval`.
+
+The serial, not the `device_id`: it survives a device registry entry being recreated,
+and it is already what `ha-bambulab` composes its unique_ids from, so the glue derives it
+without another lookup. The flat `0.2.0b1` keys are still read as a fallback when no
+per-printer key exists, so a preview tester's answers carry over.
+
+**Changing the model discards that printer's stored item answers.** They were answers
+about a different machine, so "actually it's an A1" re-defaults the whole list rather
+than keeping the X1's ticks. Keeping the model keeps the answers.
 
 ## What's deliberately missing
 
@@ -89,7 +169,8 @@ the whole change.
 ## Implementation notes
 
 **Discovery** keys off the *firmware* entity, not the usage sensor
-(`wiring._scan_printers`). Every supported printer has the firmware entity; a model that
+(`wiring.scan_printers`, shared with the options flow so the picker and the reconcile
+see the same fleet). Every supported printer has the firmware entity; a model that
 doesn't report `info.usage_hours` still gets its calendar-based items, just without the
 hours half. An hours item on such a printer degrades to a plain recurring task rather
 than being dropped, on the grounds that a task firing a little early beats a service
