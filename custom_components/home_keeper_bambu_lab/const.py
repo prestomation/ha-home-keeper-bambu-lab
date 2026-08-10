@@ -53,6 +53,24 @@ UPDATE_UNIQUE_SUFFIX = "_firmware_update"
 # device_class of the binary_sensor variant — an extra sanity filter for that domain.
 FIRMWARE_BINARY_DEVICE_CLASS = "update"
 
+# The printer's cumulative run-time counter, which the maintenance catalog meters
+# against. ``BambuLabSensor`` composes ``unique_id = f"{serial}_{description.key}"``,
+# so we match the same way we match firmware: by unique_id suffix on the bambu_lab
+# platform. It is ``SensorStateClass.TOTAL_INCREASING`` hours with no per-model gate
+# (only ``available_fn`` on the printer actually reporting ``info.usage_hours``).
+# NOTE: it counts *printer usage* hours, not strictly print hours — close enough for a
+# service interval, and it is what Bambu's own duty-cycle guidance is written against.
+SENSOR_DOMAIN = "sensor"
+USAGE_HOURS_UNIQUE_SUFFIX = "_total_usage_hours"
+USAGE_HOURS_UNIT = "h"
+
+# Key under our ``source`` namespace naming which thing a task mirrors: ``"firmware"``
+# for the update mirror, or a ``catalog.CatalogItem.key`` for a maintenance task. Tasks
+# created before this key existed carry no ``item`` and are firmware tasks, so a missing
+# value reads as ITEM_FIRMWARE rather than as "unknown".
+SOURCE_ITEM = "item"
+ITEM_FIRMWARE = "firmware"
+
 # Attributes a standard HA ``update`` entity exposes; we read these to enrich the task.
 ATTR_INSTALLED_VERSION = "installed_version"
 ATTR_LATEST_VERSION = "latest_version"
@@ -70,8 +88,15 @@ REARM_COOLDOWN_SECONDS = 15 * 60
 
 # ── Options (config_flow) ────────────────────────────────────────────────────
 OPT_NAME_TEMPLATE = "name_template"
+# Master switch for the whole maintenance catalog (per-item toggles live under
+# ``catalog.option_key_enabled``). Off by default: someone who installed this glue for
+# firmware mirroring shouldn't wake up to eight new tasks per printer after an upgrade.
+OPT_MAINTENANCE = "maintenance"
 
 DEFAULT_NAME_TEMPLATE = "Update firmware: {printer_name}"
+DEFAULT_MAINTENANCE = False
+# Task name for a catalog item: "<item>: <printer>", matching the firmware task's shape.
+MAINTENANCE_NAME_TEMPLATE = "{item_name}: {printer_name}"
 
 # Display metadata for the "Managed by" chip Home Keeper renders on our tasks, and the
 # prompt shown where a Done action would normally be (the task is completion-blocked —

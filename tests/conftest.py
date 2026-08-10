@@ -27,7 +27,8 @@ def _load_pure_modules() -> None:
     pkg = types.ModuleType("bl")
     pkg.__path__ = [str(_COMPONENT_DIR)]  # type: ignore[attr-defined]
     sys.modules["bl"] = pkg
-    for name in ("const", "logic"):
+    # Order matters: ``logic`` imports ``catalog`` and ``const``, so they load first.
+    for name in ("const", "catalog", "logic"):
         spec = importlib.util.spec_from_file_location(
             f"bl.{name}", str(_COMPONENT_DIR / f"{name}.py")
         )
@@ -37,6 +38,7 @@ def _load_pure_modules() -> None:
         spec.loader.exec_module(module)
     sys.modules["bl_logic"] = sys.modules["bl.logic"]
     sys.modules["bl_const"] = sys.modules["bl.const"]
+    sys.modules["bl_catalog"] = sys.modules["bl.catalog"]
 
 
 _load_pure_modules()

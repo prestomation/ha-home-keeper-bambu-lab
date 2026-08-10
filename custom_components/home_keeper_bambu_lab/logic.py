@@ -26,11 +26,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from . import catalog
 from .const import (
     COMPLETION_PROMPT,
+    ITEM_FIRMWARE,
+    MAINTENANCE_NAME_TEMPLATE,
     MANAGED_DISPLAY_NAME,
     MANAGED_ICON,
+    SOURCE_ITEM,
     SOURCE_NS,
+    USAGE_HOURS_UNIT,
 )
 
 
@@ -87,12 +92,17 @@ class UpdateTask:
     superseded the one the task was created for), so the card always shows the version
     actually available. Each field is ``None`` when it hasn't drifted, so ``wiring.py``
     only sends the fields that changed.
+
+    For a maintenance task the drifted fields are open-ended (the ``sensor`` binding,
+    ``interval``/``unit``, ``notes``), so they ride in *fields* as a ready-made
+    ``update_task`` payload fragment instead of one attribute per key.
     """
 
     task_id: str
     device_id: str
     chips: list[dict[str, str]] | None = None
     notes: str | None = None
+    fields: dict[str, Any] | None = None
 
 
 Action = CreateTask | ArmTask | ClearTask | DeleteTask | UpdateTask
@@ -106,10 +116,26 @@ def _is_ours(task: Any) -> bool:
     return isinstance((task.get("source") or {}).get(SOURCE_NS), dict)
 
 
-def task_for_device(tasks: list[dict], device_id: str) -> dict | None:
-    """Return our task for *device_id* (matched by our ``source`` namespace), or None."""
+def task_item(task: dict) -> str:
+    """Which thing one of our tasks mirrors: ``"firmware"`` or a catalog item key.
+
+    Tasks created before the catalog existed carry no ``item``, and every one of those
+    is a firmware mirror — so a missing key reads as firmware rather than as an unknown
+    item that reconcile would then try to delete.
+    """
+    return (task["source"][SOURCE_NS]).get(SOURCE_ITEM) or ITEM_FIRMWARE
+
+
+def task_for_device(
+    tasks: list[dict], device_id: str, item: str = ITEM_FIRMWARE
+) -> dict | None:
+    """Return our *item* task for *device_id* (matched by our ``source`` ns), or None."""
     for task in tasks:
-        if _is_ours(task) and task["source"][SOURCE_NS].get("device_id") == device_id:
+        if (
+            _is_ours(task)
+            and task["source"][SOURCE_NS].get("device_id") == device_id
+            and task_item(task) == item
+        ):
             return task
     return None
 
@@ -230,7 +256,13 @@ def build_add_task_payload(
         "notes": _format_notes(latest_version, installed_version),
         "recurrence_type": "triggered",
         "device_id": device_id,
-        "source": {SOURCE_NS: {"device_id": device_id, "entity_id": entity_id}},
+        "source": {
+            SOURCE_NS: {
+                "device_id": device_id,
+                "entity_id": entity_id,
+                SOURCE_ITEM: ITEM_FIRMWARE,
+            }
+        },
         "task_chips": build_firmware_chips(latest_version, release_url),
         "managed_by": {
             "integration": SOURCE_NS,
@@ -391,4 +423,196 @@ def plan_reconcile(
                     cleared_version=installed,
                 )
             )
+    return actions
+
+
+# ── maintenance catalog ──────────────────────────────────────────────────────
+def _format_item_name(item_name: str, printer_name: str) -> str:
+    """Render a catalog task's name, defensively.
+
+    Mirrors ``_format_name``'s guard on the firmware side: a printer whose
+    (user-editable) name contains a brace would otherwise raise here and drop the whole
+    catalog for that printer.
+    """
+    try:
+        return MAINTENANCE_NAME_TEMPLATE.format(
+            item_name=item_name, printer_name=printer_name
+        )
+    except (KeyError, IndexError, ValueError):
+        return f"{item_name}: {printer_name}"
+
+
+def build_catalog_task_payload(
+    resolved: catalog.ResolvedItem,
+    *,
+    device_id: str,
+    printer_name: str,
+    config_entry_id: str,
+    usage_entity_id: str | None,
+) -> dict[str, Any]:
+    """The ``home_keeper.add_task`` payload for one resolved catalog item.
+
+    Two shapes, chosen by the item as resolved *for this printer's family*:
+
+    * **usage** — a Home Keeper ``sensor``/``usage`` task metered against the printer's
+      cumulative usage-hours entity, with the item's calendar interval as its *time
+      backstop*. That pairing is the point: Bambu's own guidance is written as "every
+      three months if you print about eight hours a day", which is a duty cycle, not a
+      date. A printer left unused still comes due on the calendar half; one that runs
+      day and night comes due on hours long before that.
+    * **time** — a plain ``floating`` task, for the items Bambu schedules by the
+      calendar alone (the carbon rods carry no lubricant; anti-rust is about humidity,
+      not hours).
+
+    An item that *should* be metered but whose printer exposes no usage-hours entity
+    degrades to the calendar half rather than being dropped — a task that fires a little
+    early beats a service that never gets mentioned.
+
+    ``managed_by`` marks the task ours and deletion-protected, but deliberately
+    **not** ``completion_blocked``: unlike the firmware mirror, a human does this work
+    and checks it off.
+    """
+    item = resolved.item
+    payload: dict[str, Any] = {
+        "name": _format_item_name(item.name, printer_name),
+        "notes": resolved.notes,
+        "device_id": device_id,
+        "source": {
+            SOURCE_NS: {
+                "device_id": device_id,
+                "entity_id": usage_entity_id or "",
+                SOURCE_ITEM: item.key,
+            }
+        },
+        "managed_by": {
+            "integration": SOURCE_NS,
+            "display_name": MANAGED_DISPLAY_NAME,
+            "icon": MANAGED_ICON,
+            "config_entry_id": config_entry_id,
+            "deletion_protected": True,
+            "locked_fields": ["name", "recurrence_type", "device_id"],
+        },
+    }
+    if resolved.is_usage and usage_entity_id:
+        payload["recurrence_type"] = "sensor"
+        payload["sensor"] = {
+            "entity_id": usage_entity_id,
+            "mode": "usage",
+            "target": resolved.hours,
+            "unit": USAGE_HOURS_UNIT,
+            "also_every": {"interval": resolved.interval, "unit": resolved.unit},
+            "combinator": "any",
+        }
+    else:
+        payload["recurrence_type"] = "floating"
+        payload["interval"] = resolved.interval
+        payload["unit"] = resolved.unit
+    return payload
+
+
+def catalog_task_drift(
+    task: dict,
+    resolved: catalog.ResolvedItem,
+    *,
+    usage_entity_id: str | None,
+) -> dict[str, Any] | None:
+    """Fields to push onto an existing catalog task, or ``None`` if it already matches.
+
+    Only the parts we own are compared. The ``sensor`` binding is compared on target and
+    backstop **but never on ``baseline``** — that is Home Keeper's accumulated usage and
+    must survive a reconcile untouched.
+    """
+    updates: dict[str, Any] = {}
+    if resolved.is_usage and usage_entity_id:
+        current = task.get("sensor") or {}
+        desired = {
+            "entity_id": usage_entity_id,
+            "mode": "usage",
+            "target": float(resolved.hours or 0),
+            "unit": USAGE_HOURS_UNIT,
+            "also_every": {"interval": resolved.interval, "unit": resolved.unit},
+            "combinator": "any",
+        }
+        comparable = {
+            k: (float(v) if k == "target" else v)
+            for k, v in current.items()
+            if k != "baseline"
+        }
+        if comparable != desired:
+            updates["sensor"] = desired
+    elif int(task.get("interval") or 0) != resolved.interval or (
+        task.get("unit") != resolved.unit
+    ):
+        updates["interval"] = resolved.interval
+        updates["unit"] = resolved.unit
+    if (task.get("notes") or "") != resolved.notes:
+        updates["notes"] = resolved.notes
+    return updates or None
+
+
+def plan_catalog(
+    tasks: list[dict],
+    printers: dict[str, dict[str, Any]],
+    *,
+    config_entry_id: str,
+    enabled: bool,
+    options: dict[str, Any] | None = None,
+) -> list[Action]:
+    """Converge every catalog task for every known printer.
+
+    *printers* maps ``device_id`` → ``{"name", "serial", "model", "usage_entity_id"}``.
+    Each printer's family is resolved from the user's override if there is one and the
+    detected model otherwise, and that family decides which items apply and on what
+    interval — an A1 has no chamber filter and no X-axis carbon rods, so it gets neither.
+
+    Creates a task for each enabled item on each printer, refreshes one that has drifted
+    (the user changed an interval or corrected the model), and deletes the tasks of items
+    that no longer apply — including every catalog task when the feature is switched
+    off, which is what makes the master toggle safe to flip back and forth.
+
+    Firmware tasks are untouched: they are matched by their own ``item`` key, so the two
+    planners never see each other's tasks.
+    """
+    actions: list[Action] = []
+    wanted: set[tuple[str, str]] = set()
+
+    if enabled:
+        for device_id, info in printers.items():
+            usage_entity_id = info.get("usage_entity_id")
+            printer_name = info.get("name") or device_id
+            serial = str(info.get("serial") or "")
+            family = catalog.resolved_family(serial, info.get("model"), options)
+            for resolved in catalog.resolve_all(family, serial, options):
+                if not resolved.enabled:
+                    continue
+                item_key = resolved.item.key
+                wanted.add((device_id, item_key))
+                existing = task_for_device(tasks, device_id, item_key)
+                if existing is None:
+                    actions.append(
+                        CreateTask(
+                            device_id,
+                            build_catalog_task_payload(
+                                resolved,
+                                device_id=device_id,
+                                printer_name=printer_name,
+                                config_entry_id=config_entry_id,
+                                usage_entity_id=usage_entity_id,
+                            ),
+                        )
+                    )
+                    continue
+                drift = catalog_task_drift(
+                    existing, resolved, usage_entity_id=usage_entity_id
+                )
+                if drift is not None:
+                    actions.append(UpdateTask(existing["id"], device_id, fields=drift))
+
+    for task in our_tasks(tasks):
+        item_key = task_item(task)
+        if item_key == ITEM_FIRMWARE or item_key not in catalog.BY_KEY:
+            continue
+        device_id = (task["source"][SOURCE_NS]).get("device_id")
+        if (device_id, item_key) not in wanted:
+            actions.append(DeleteTask(task["id"], device_id))
     return actions

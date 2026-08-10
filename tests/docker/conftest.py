@@ -8,6 +8,7 @@ mirroring ha-home-keeper's integration conftest.
 from __future__ import annotations
 
 import time
+from typing import ClassVar
 
 import pytest
 import requests
@@ -79,9 +80,7 @@ def token() -> str:
     headers = {"Authorization": f"Bearer {access}"}
     while time.monotonic() < deadline:
         r = requests.get(f"{HA_URL}/api/states", headers=headers, timeout=10)
-        if r.ok and any(
-            s["entity_id"] == "todo.home_keeper_tasks" for s in r.json()
-        ):
+        if r.ok and any(s["entity_id"] == "todo.home_keeper_tasks" for s in r.json()):
             return access
         time.sleep(2)
     raise TimeoutError("Home Keeper entities did not appear")
@@ -92,7 +91,7 @@ def api(token):
     """A tiny REST client bound to the authenticated session."""
 
     class _Api:
-        headers = {"Authorization": f"Bearer {token}"}
+        headers: ClassVar[dict[str, str]] = {"Authorization": f"Bearer {token}"}
 
         def call_service(self, domain: str, service: str, data: dict) -> None:
             r = requests.post(
@@ -102,6 +101,17 @@ def api(token):
                 timeout=10,
             )
             r.raise_for_status()
+
+        def call_service_response(self, domain: str, service: str, data: dict) -> dict:
+            r = requests.post(
+                f"{HA_URL}/api/services/{domain}/{service}?return_response",
+                headers=self.headers,
+                json=data,
+                timeout=10,
+            )
+            r.raise_for_status()
+            body = r.json()
+            return body.get("service_response", body)
 
         def state(self, entity_id: str) -> str | None:
             r = requests.get(
@@ -117,8 +127,6 @@ def api(token):
                 if last == want:
                     return last
                 time.sleep(1)
-            raise AssertionError(
-                f"{entity_id} did not reach {want!r} (last={last!r})"
-            )
+            raise AssertionError(f"{entity_id} did not reach {want!r} (last={last!r})")
 
     return _Api()

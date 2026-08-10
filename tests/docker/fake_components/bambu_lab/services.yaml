@@ -11,3 +11,19 @@ set_firmware_available:
       default: true
       selector:
         boolean:
+
+advance_usage_hours:
+  name: Advance usage hours
+  description: >-
+    Test helper — winds the fake printer's cumulative usage-hours counter forward, so
+    the e2e tiers can watch a Home Keeper usage task arm without real print time.
+  fields:
+    hours:
+      name: Hours
+      description: How many hours to add to the counter.
+      required: false
+      default: 1
+      selector:
+        number:
+          mode: box
+          step: any

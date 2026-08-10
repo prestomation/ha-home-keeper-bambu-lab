@@ -38,7 +38,9 @@ class BambuFakeUpdate(UpdateEntity):
             identifiers={(DOMAIN, serial)},
             name=name,
             manufacturer="Bambu Lab",
-            model="X1 Carbon",
+            # The raw ``device_type``, which is what ha-bambulab writes here and
+            # what the maintenance catalog detects the printer's family from.
+            model="X1C",
         )
 
     @property

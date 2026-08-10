@@ -63,12 +63,14 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
         resp = await hass.services.async_call(
             HK_DOMAIN, "list_tasks", {}, blocking=True, return_response=True
         )
-    except Exception:  # noqa: BLE001 - cleanup must never raise on removal
+    except Exception:
         _LOGGER.debug("Could not list Home Keeper tasks during removal", exc_info=True)
         return
     for task in (resp or {}).get("tasks", []):
         src = (task.get("source") or {}).get(SOURCE_NS)
-        if isinstance(src, dict) and hass.services.has_service(HK_DOMAIN, "delete_task"):
+        if isinstance(src, dict) and hass.services.has_service(
+            HK_DOMAIN, "delete_task"
+        ):
             try:
                 await hass.services.async_call(
                     HK_DOMAIN,

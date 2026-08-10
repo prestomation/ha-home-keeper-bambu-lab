@@ -1,51 +1,14 @@
 {
   "version": 1,
-  "minor_version": 1,
+  "minor_version": 5,
   "key": "core.config_entries",
   "data": {
     "entries": [
-      {
-        "entry_id": "home_keeper_e2e_entry",
-        "version": 1,
-        "minor_version": 1,
-        "domain": "home_keeper",
-        "title": "Home Keeper",
-        "data": {},
-        "options": {},
-        "pref_disable_new_entities": false,
-        "pref_disable_polling": false,
-        "source": "user",
-        "unique_id": "home_keeper_local",
-        "disabled_by": null
-      },
-      {
-        "entry_id": "bambu_lab_e2e_entry",
-        "version": 1,
-        "minor_version": 1,
-        "domain": "bambu_lab",
-        "title": "X1 Carbon",
-        "data": { "serial": "E2E0001", "name": "X1 Carbon" },
-        "options": {},
-        "pref_disable_new_entities": false,
-        "pref_disable_polling": false,
-        "source": "user",
-        "unique_id": "E2E0001",
-        "disabled_by": null
-      },
-      {
-        "entry_id": "hk_bambu_lab_e2e_entry",
-        "version": 1,
-        "minor_version": 1,
-        "domain": "home_keeper_bambu_lab",
-        "title": "Bambu Lab",
-        "data": {},
-        "options": {},
-        "pref_disable_new_entities": false,
-        "pref_disable_polling": false,
-        "source": "user",
-        "unique_id": "home_keeper_bambu_lab",
-        "disabled_by": null
-      }
+      {"created_at":"1970-01-01T00:00:00+00:00","data":{},"disabled_by":null,"discovery_keys":{},"domain":"home_keeper","entry_id":"home_keeper_e2e_entry","minor_version":1,"modified_at":"1970-01-01T00:00:00+00:00","options":{},"pref_disable_new_entities":false,"pref_disable_polling":false,"source":"user","subentries":[],"title":"Home Keeper","unique_id":"home_keeper_local","version":1},
+      {"created_at":"1970-01-01T00:00:00+00:00","data":{"name":"X1 Carbon","serial":"E2E0001"},"disabled_by":null,"discovery_keys":{},"domain":"bambu_lab","entry_id":"bambu_lab_e2e_entry","minor_version":1,"modified_at":"1970-01-01T00:00:00+00:00","options":{},"pref_disable_new_entities":false,"pref_disable_polling":false,"source":"user","subentries":[],"title":"X1 Carbon","unique_id":"E2E0001","version":1},
+      {"created_at":"1970-01-01T00:00:00+00:00","data":{},"disabled_by":null,"discovery_keys":{},"domain":"home_keeper_bambu_lab","entry_id":"hk_bambu_lab_e2e_entry","minor_version":1,"modified_at":"1970-01-01T00:00:00+00:00","options":{"maintenance":true,"printer_E2E0001_item_camera_lens_enabled":false,"printer_E2E0001_item_carbon_filter_enabled":false,"printer_E2E0001_item_carbon_rods_enabled":false,"printer_E2E0001_item_linear_rods_enabled":false,"printer_E2E0001_item_rod_antirust_enabled":false,"printer_E2E0001_item_z_lead_screws_enabled":true,"printer_E2E0001_item_z_lead_screws_interval":5,"printer_E2E0001_model":"unknown"},"pref_disable_new_entities":false,"pref_disable_polling":false,"source":"user","subentries":[],"title":"Bambu Lab","unique_id":"home_keeper_bambu_lab","version":1},
+      {"created_at":"2026-08-10T08:07:37.340801+00:00","data":{},"disabled_by":null,"discovery_keys":{},"domain":"analytics","entry_id":"01KZNBD0KWHEE7WDDHYPJ1X3V1","minor_version":1,"modified_at":"2026-08-10T08:07:37.340804+00:00","options":{},"pref_disable_new_entities":false,"pref_disable_polling":false,"source":"system","subentries":[],"title":"Analytics","unique_id":null,"version":1},
+      {"created_at":"2026-08-10T08:07:37.347633+00:00","data":{},"disabled_by":null,"discovery_keys":{},"domain":"backup","entry_id":"01KZNBD0M3HPEGHFKF2PM4S37S","minor_version":1,"modified_at":"2026-08-10T08:07:37.347635+00:00","options":{},"pref_disable_new_entities":false,"pref_disable_polling":false,"source":"system","subentries":[],"title":"Backup","unique_id":null,"version":1}
     ]
   }
 }

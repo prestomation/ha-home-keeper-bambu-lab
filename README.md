@@ -94,13 +94,81 @@ Four tiers (see `ci/`):
 > `bambu_lab` platform (toggled via `bambu_lab.set_firmware_available`). The real
 > integration's firmware surface is guarded by the static contract test.
 
-## Roadmap
+## Printer maintenance (optional)
 
-V1 is firmware updates. The longer-term goal is **printer maintenance** (nozzle wear, belt
-tension, lubrication, etc.) surfaced as Home Keeper tasks — but that data should be *modeled
-in the Bambu Lab integration itself*, not invented here, so this glue stays a thin mirror.
-That work is tracked separately; see the design notes in
-[ha-home-keeper `IDEAS.md`](https://github.com/prestomation/ha-home-keeper/blob/main/IDEAS.md).
+Firmware is a mirror: the printer tells us when an update is waiting. Maintenance has no
+such signal, so this is the one place the glue holds an opinion. Turn on **Also create
+printer maintenance tasks** in the options and it creates a Home Keeper task per item
+per printer, following **Bambu Lab's own published schedule**.
+
+| Item | Interval | On by default for |
+|---|---|---|
+| Clean and oil the linear rods | 150 printer hours, or 1 month | every printer |
+| Grease the Z-axis lead screws | 450 printer hours, or 3 months | every printer |
+| Replace the activated carbon air filter | 720 printer hours, or 3 months | X1, P1S, P2S/X2D, H2 |
+| Clean the X-axis carbon rods | 1 month | X1, P1P, P1S |
+| Anti-rust treatment on the Y/Z rods | 3 months | X1, P1P, P1S |
+| Clean the camera lens | 6 months | every printer but the A1 (see below) |
+| Check and clean the extruder gear | 1 week | nothing |
+| Check and clean the toolhead fans | 1 week | nothing |
+
+**Items are enabled per model.** Bambu Lab's schedule is not the same for every printer,
+so the glue reads each printer's model from the Bambu Lab integration and turns on the
+items that actually apply. An A1 has no enclosure and no X-axis carbon rods, so it gets
+neither the air filter nor the carbon-rod task, while an X1C in the same house gets both.
+When you turn maintenance on, the options walk you through your printers one at a time:
+confirm (or correct) the model, then tick the items.
+
+Off by default does not always mean "your printer lacks the part". The A1 series has a
+camera; what it lacks is a published cleaning cadence, since the six-month figure comes
+from the P2S page and the A1 page has no periodic camera step. So the item ships off
+there rather than shipping a number we invented, and an A1 owner can switch it on.
+
+Detection only decides the **defaults**. Every item is listed for every printer, so a
+model we do not recognise — including whatever Bambu ships next — is still fully
+configurable: pick **Other / not listed** and tick what your machine has. An
+unrecognised printer starts with the items every Bambu Lab printer shares (linear rods,
+lead screws, camera) and nothing model-specific, because a reminder to service a part
+you do not have is worse than no reminder. Correcting the model re-applies that model's
+defaults, so *"actually it's an A1"* does what you mean.
+
+![The model step: "Detected model: X1C", with a dropdown of printer series to confirm or correct it](docs/images/flow-5-options-model.png)
+
+![The items step: every maintenance item with a toggle and an interval, pre-filled from the X1 series schedule](docs/images/flow-6-options-items.png)
+
+**Why two numbers.** Bambu's guidance is written as a duty cycle, not a date: the X1 wiki
+says to change the air filter *"every three months if the printer is used for about 8
+hours a day"*, and *"every month"* for a production machine. That is 8 × 90 = 720 printer
+hours, so the hours figure and the calendar figure together reproduce the manufacturer's
+own rule. Items metered in hours become Home Keeper **usage tasks** bound to the printer's
+`sensor.<printer>_total_usage_hours`, with the calendar figure as a backstop, so whichever
+lands first wins. Items Bambu schedules by the calendar alone (the carbon rods carry no
+lubricant; anti-rust is about humidity) become plain recurring tasks.
+
+Every interval is a **default, not a decree**. Change any of them in the options, or edit
+the task itself in Home Keeper: the glue deliberately leaves the sensor binding unlocked,
+and Home Keeper keeps the hours you've already accumulated when you retune the target.
+Each item can also be switched off individually.
+
+Two caveats worth stating plainly:
+
+- `total_usage_hours` counts **printer usage** hours, not strictly print hours. Close
+  enough for a service interval, and it is what Bambu's own guidance is written against.
+- **The nozzle and the cutter blade are deliberately absent.** Bambu publishes those
+  intervals in *spools of filament* ("check the blade every 3–5 rolls"), and no Home
+  Assistant sensor exposes a spool count, so there is no honest conversion. Rather than
+  invent a number, the catalog leaves them out. Add your own usage task against the
+  hours sensor if you want one.
+
+Unlike the firmware mirror, these tasks are yours to check off: you do the work, so the
+**Done** button is live and each completion is recorded in the task's history (which also
+restarts both halves of the interval).
+
+![A maintenance task and the firmware task side by side in the Monitored section](docs/images/flow-3-maintenance-monitored.png)
+
+![The lead-screw task's detail page: "Every 5 h of use, or every 3 months", a progress bar, and "1 h to go"](docs/images/flow-4-maintenance-detail.png)
+
+Design notes and the sourced interval table: [`docs/MAINTENANCE_CATALOG_PLAN.md`](docs/MAINTENANCE_CATALOG_PLAN.md).
 
 ## Design
 

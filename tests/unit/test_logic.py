@@ -2,7 +2,6 @@
 
 import bl_logic as L
 
-
 CFG = "entry123"
 TMPL = "Update firmware: {printer_name}"
 NS = "home_keeper_bambu_lab"
@@ -29,16 +28,16 @@ def _task(
 
 
 def _available(**over):
-    kwargs = dict(
-        device_id="x1c",
-        entity_id="update.x1c_firmware_update",
-        printer_name="X1 Carbon",
-        config_entry_id=CFG,
-        name_template=TMPL,
-        latest_version="01.08.02.00",
-        installed_version="01.07.00.00",
-        release_url="https://bambulab.com/release",
-    )
+    kwargs = {
+        "device_id": "x1c",
+        "entity_id": "update.x1c_firmware_update",
+        "printer_name": "X1 Carbon",
+        "config_entry_id": CFG,
+        "name_template": TMPL,
+        "latest_version": "01.08.02.00",
+        "installed_version": "01.07.00.00",
+        "release_url": "https://bambulab.com/release",
+    }
     kwargs.update(over)
     return kwargs
 
@@ -91,7 +90,9 @@ def test_available_with_already_armed_task_is_noop():
 # ── firmware cleared ─────────────────────────────────────────────────────────
 def test_clear_armed_task_returns_clear_action_with_up_to_date_notes():
     tasks = [_task("x1c", next_due="2026-06-01T00:00:00-04:00")]
-    action = L.plan_update_cleared(tasks, device_id="x1c", installed_version="01.08.02.00")
+    action = L.plan_update_cleared(
+        tasks, device_id="x1c", installed_version="01.08.02.00"
+    )
     assert action == L.ClearTask(
         "task_x1c",
         "x1c",
@@ -112,7 +113,9 @@ def test_clear_dormant_or_absent_is_noop():
 
 
 def test_format_up_to_date_notes():
-    assert L.format_up_to_date_notes("01.08.02.00") == "Firmware up to date · 01.08.02.00"
+    assert (
+        L.format_up_to_date_notes("01.08.02.00") == "Firmware up to date · 01.08.02.00"
+    )
     assert L.format_up_to_date_notes(None) == "Firmware up to date"
 
 
@@ -221,7 +224,9 @@ def test_malformed_tasks_are_ignored():
 def test_reconcile_creates_arms_and_clears_to_converge():
     tasks = [
         _task("avail_dormant", next_due=None),  # update now -> arm
-        _task("installed_still_armed", next_due="2026-06-01T00:00:00-04:00"),  # off -> clear
+        _task(
+            "installed_still_armed", next_due="2026-06-01T00:00:00-04:00"
+        ),  # off -> clear
         _task(
             "avail_already_armed",
             next_due="2026-06-01T00:00:00-04:00",
@@ -236,7 +241,11 @@ def test_reconcile_creates_arms_and_clears_to_converge():
             "latest_version": "01.08.02.00",
             "release_url": None,
         },
-        "brand_new": {"name": "C", "latest_version": None, "release_url": None},  # create
+        "brand_new": {
+            "name": "C",
+            "latest_version": None,
+            "release_url": None,
+        },  # create
     }
     up_to_date = {"installed_still_armed": "01.09.00.00"}
     actions = L.plan_reconcile(
@@ -259,7 +268,8 @@ def test_reconcile_creates_arms_and_clears_to_converge():
     assert len(creates) == 1 and creates[0].device_id == "brand_new"
     # The already-armed device with matching chips/notes produces no arm/refresh action.
     assert not any(
-        isinstance(a, L.ArmTask) and a.device_id == "avail_already_armed" for a in actions
+        isinstance(a, L.ArmTask) and a.device_id == "avail_already_armed"
+        for a in actions
     )
     assert not any(
         isinstance(a, L.UpdateTask) and a.device_id == "avail_already_armed"
@@ -297,9 +307,7 @@ def test_reconcile_keeps_armed_task_for_offline_printer():
     # absent from both sets) must keep its armed task — clearing it would record a phantom
     # firmware install.
     tasks = [_task("offline", next_due="2026-06-01T00:00:00-04:00")]
-    actions = L.plan_reconcile(
-        tasks, {}, {}, config_entry_id=CFG, name_template=TMPL
-    )
+    actions = L.plan_reconcile(tasks, {}, {}, config_entry_id=CFG, name_template=TMPL)
     assert actions == []
 
 
@@ -329,7 +337,9 @@ def test_reconcile_refreshes_chips_and_notes_when_version_supersedes():
     assert len(refreshes) == 1
     assert refreshes[0].task_id == "task_x1c"
     assert refreshes[0].chips == [{"label": "01.08.02.00", "icon": "mdi:package-up"}]
-    assert refreshes[0].notes == "Firmware 01.08.02.00 available · installed 01.06.00.00"
+    assert (
+        refreshes[0].notes == "Firmware 01.08.02.00 available · installed 01.06.00.00"
+    )
 
 
 def test_reconcile_refreshes_only_drifted_field():
@@ -354,7 +364,13 @@ def test_reconcile_refreshes_only_drifted_field():
 
 
 def test_reconcile_ignores_foreign_tasks():
-    tasks = [_task("x1c", extra_source={"pawsistant": {"x": 1}}, next_due="2026-01-01T00:00:00-04:00")]
-    assert L.plan_reconcile(
-        tasks, {}, {}, config_entry_id=CFG, name_template=TMPL
-    ) == []
+    tasks = [
+        _task(
+            "x1c",
+            extra_source={"pawsistant": {"x": 1}},
+            next_due="2026-01-01T00:00:00-04:00",
+        )
+    ]
+    assert (
+        L.plan_reconcile(tasks, {}, {}, config_entry_id=CFG, name_template=TMPL) == []
+    )
