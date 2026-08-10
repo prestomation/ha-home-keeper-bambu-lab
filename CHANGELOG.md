@@ -4,10 +4,38 @@ All notable changes to the Home Keeper — Bambu Lab glue are documented here. T
 follows [Keep a Changelog](https://keepachangelog.com/) and the project uses semantic
 versioning (with PEP 440 pre-release suffixes — `bN`/`aN`/`rcN` — for betas).
 
-## [0.2.0b1]
+## [0.2.0] - 2026-08-10
+
+First stable release. Surfaces [Bambu Lab](https://github.com/greghesp/ha-bambulab) printer
+firmware updates and an opinionated maintenance catalog as
+[Home Keeper](https://github.com/prestomation/ha-home-keeper) tasks.
 
 ### Added
 
+- **Firmware update → a read-only Home Keeper task.** When a Bambu Lab printer reports an
+  update is available — via either its `update` entity or its firmware `binary_sensor`
+  (the glue mirrors whichever one the printer's Bambu Lab setup exposes) — the glue creates
+  a Home Keeper **"Update firmware: …"** task, armed (due-now), attached to the printer's
+  device with a *"Managed by Bambu Lab"* chip, a version chip, and a *Release notes* link
+  when the entity provides a URL. When the firmware is installed (the entity returns to
+  up-to-date) the task records the completion, goes dormant (into the **Monitored**
+  section), and its note refreshes to say firmware is up to date instead of continuing to
+  advertise the now-installed update. It's a **read-only mirror** — carried via
+  `managed_by.completion_blocked`, so it can't be checked off by hand and clears only when
+  the printer reports it's current. An offline printer (`unavailable`/`unknown`) never
+  clears the task, so no phantom install is recorded, and a reconnect flap that briefly
+  re-reports the *same* firmware the printer just installed is ignored for a short window
+  after the clear, so one install records one completion (a genuinely newer firmware still
+  re-arms immediately). Stateless and self-healing: state is re-derived from
+  `home_keeper.list_tasks` + Bambu Lab's registry entities and reconciled on Home Assistant
+  start; every cross-integration call is `has_service`-guarded. Detection is
+  entity-state-driven (Bambu Lab exposes no bus events for firmware). Option: task name
+  template.
+- **Announces itself to Home Keeper's companion discovery.** Registers with Home Keeper
+  (via its `register_companion` service) so it appears as a **connected** companion under
+  Home Keeper's **Settings → Companions**, with a *Configure* button that opens this glue's
+  settings. Best-effort and re-announced on Home Keeper reload; a no-op on older Home
+  Keeper versions without companion discovery.
 - **Optional printer maintenance tasks, following Bambu Lab's own published schedule.**
   Turn on **Also create printer maintenance tasks** in the options and the glue creates a
   Home Keeper task per item per printer: lead-screw greasing, rod cleaning and anti-rust,
@@ -55,23 +83,6 @@ versioning (with PEP 440 pre-release suffixes — `bN`/`aN`/`rcN` — for betas)
   items. Options are stored per printer, keyed on the printer's serial; the flat keys
   from the `0.2.0.dev6` preview are still read as a fallback, so preview testers keep
   their answers.
-
-### Fixed
-
-- **A single firmware install no longer records two completions.** A printer's
-  update entity can present more than one `on`→`off` edge for one install — the printer
-  reboots and reconnects, and a stale/retained MQTT message (or a staged,
-  version-by-version update) can briefly re-report the update as available after the task
-  already cleared. The glue re-armed on that flap and cleared again, logging a phantom
-  second completion. For a short window after a clear it now ignores a re-arm that merely
-  re-offers the *same* firmware the printer just installed (a genuinely newer firmware
-  still re-arms immediately), so one install records one completion.
-- **A firmware task's note no longer stays frozen at "… available" after the update.**
-  The note was written only when the task was created and never refreshed, so a task that
-  had already cleared kept advertising the (now-installed) update — e.g. *"Firmware
-  01.08.01.00 available · installed 01.06.00.00"*. It now reads *"Firmware up to date …"*
-  once the printer reports it's current, and is kept in step (alongside the version chip)
-  when a newer firmware supersedes the one the task was created for.
 
 ## [0.1.0b2] - 2026-07-01
 
