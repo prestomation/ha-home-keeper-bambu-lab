@@ -108,7 +108,7 @@ per printer, following **Bambu Lab's own published schedule**.
 | Replace the activated carbon air filter | 720 printer hours, or 3 months | X1, P1S, P2S/X2D, H2 |
 | Clean the X-axis carbon rods | 1 month | X1, P1P, P1S |
 | Anti-rust treatment on the Y/Z rods | 3 months | X1, P1P, P1S |
-| Clean the camera lens | 6 months | every printer but the A1 |
+| Clean the camera lens | 6 months | every printer but the A1 (see below) |
 | Check and clean the extruder gear | 1 week | nothing |
 | Check and clean the toolhead fans | 1 week | nothing |
 
@@ -118,6 +118,11 @@ items that actually apply. An A1 has no enclosure and no X-axis carbon rods, so 
 neither the air filter nor the carbon-rod task, while an X1C in the same house gets both.
 When you turn maintenance on, the options walk you through your printers one at a time:
 confirm (or correct) the model, then tick the items.
+
+Off by default does not always mean "your printer lacks the part". The A1 series has a
+camera; what it lacks is a published cleaning cadence, since the six-month figure comes
+from the P2S page and the A1 page has no periodic camera step. So the item ships off
+there rather than shipping a number we invented, and an A1 owner can switch it on.
 
 Detection only decides the **defaults**. Every item is listed for every printer, so a
 model we do not recognise — including whatever Bambu ships next — is still fully

@@ -162,13 +162,17 @@ def test_family_gating_matches_the_published_schedules():
     p1s = _enabled_keys(C.FAMILY_P1S)
     p2 = _enabled_keys(C.FAMILY_P2)
 
-    # The A1 is an open-frame bed-slinger: no chamber filter, no X-axis carbon rods,
-    # and no camera in the box.
+    # The A1 is an open-frame bed-slinger: no chamber filter and no X-axis carbon rods.
     assert "carbon_filter" not in a1
     assert "carbon_rods" not in a1
-    assert "camera_lens" not in a1
     # ...but it still has rods to clean and lead screws to grease.
     assert "linear_rods" in a1 and "z_lead_screws" in a1
+    # The camera is off for a different reason: the A1 *has* one, but Bambu publishes
+    # no cleaning cadence for it, so we ship no interval rather than invent one. It
+    # must still be offered, and switching it on must work.
+    assert "camera_lens" not in a1
+    on = {C.option_key_enabled(SERIAL, "camera_lens"): True}
+    assert _resolved("camera_lens", C.FAMILY_A1, SERIAL, on).enabled is True
 
     # The P1P is open-frame, the P1S is enclosed — same wiki page, different chamber.
     assert "carbon_filter" not in p1p

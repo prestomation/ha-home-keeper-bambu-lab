@@ -46,6 +46,10 @@ versioning (with PEP 440 pre-release suffixes — `bN`/`aN`/`rcN` — for betas)
   re-applies that model's defaults rather than keeping answers you gave about a
   different machine.
 
+  Off by default does not always mean the part is missing. The A1 series has a camera;
+  what it lacks is a published cleaning cadence, so the camera item ships off there
+  rather than carrying a number we invented. Switch it on if you want the reminder.
+
   Turning maintenance on now walks you through your printers one at a time: pick a
   printer (skipped if you only have one), confirm or correct its model, then tick its
   items. Options are stored per printer, keyed on the printer's serial; the flat keys

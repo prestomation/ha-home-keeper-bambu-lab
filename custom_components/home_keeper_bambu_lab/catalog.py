@@ -316,13 +316,19 @@ CATALOG: tuple[CatalogItem, ...] = (
             "more often if you print ABS."
         ),
         # P2S: "Clean the camera every 6 months." X1/P1 say to clean it when the video
-        # is blurry, and weekly when printing ABS. The A1 series ships without a camera
-        # (it is an optional accessory), so it is off there.
+        # is blurry, and weekly when printing ABS.
         interval=6,
         unit="months",
         source=WIKI_P2S,
         default_enabled=True,
-        by_family={FAMILY_A1: ModelOverride(enabled=False)},
+        by_family={
+            # The A1 series *does* have a camera — the six-month cadence just isn't
+            # published for it. That figure comes from the P2S page; the A1 page has
+            # no periodic camera step at all. So this ships off for the A1 because we
+            # have no manufacturer interval to stand behind, not because the part is
+            # missing, and an A1 owner can switch it on in the options like any other.
+            FAMILY_A1: ModelOverride(enabled=False, source=WIKI_A1),
+        },
     ),
     CatalogItem(
         key="extruder_gear",

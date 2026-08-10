@@ -67,7 +67,7 @@
           "item_carbon_filter_interval": "About 720 printer hours, which is Bambu Lab's three months of eight-hour days. A quarterly calendar backstop applies as well, whichever lands first.",
           "item_carbon_rods_interval": "Bambu Lab suggests monthly. Only the X1 and P1 series use carbon rods on the X axis.",
           "item_rod_antirust_interval": "Bambu Lab suggests quarterly, on the X1 and P1 series.",
-          "item_camera_lens_interval": "Bambu Lab suggests every six months. The A1 series ships without a camera.",
+          "item_camera_lens_interval": "Bambu Lab suggests every six months. Off by default on the A1 series, which has a camera but no published cleaning interval — switch it on if you want the reminder.",
           "item_extruder_gear_interval": "Bambu Lab suggests weekly. Off by default on every model, because weekly is a lot of reminders unless the printer runs most days.",
           "item_toolhead_fans_interval": "Bambu Lab suggests weekly, and it is off by default for the same reason as the extruder gear check."
         }

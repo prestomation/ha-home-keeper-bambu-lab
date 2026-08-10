@@ -59,7 +59,7 @@ derivation is in a comment on the item in `catalog.py`.
 | `carbon_filter` | Replace the activated carbon air filter | 720 | 3 months | X1, P1S, P2, H2 | [X1][x1] (8 h/day × 90 d; "every month" for a production machine falls out of the hours half) |
 | `carbon_rods` | Clean the X-axis carbon rods | — | 1 month | X1, P1P, P1S | [X1][x1] ("checked once a month"; no lubricant, so no hours figure) |
 | `rod_antirust` | Anti-rust treatment on the Y/Z rods | — | 3 months | X1, P1P, P1S | [X1][x1] ("anti-rust every three months") |
-| `camera_lens` | Clean the camera lens | — | 6 months | every printer but the A1 | [P2S][p2s] ("clean the camera every 6 months") |
+| `camera_lens` | Clean the camera lens | — | 6 months | every printer but the A1 | [P2S][p2s] ("clean the camera every 6 months"); the A1 has a camera but no published cadence |
 | `extruder_gear` | Check and clean the extruder gear | — | 1 week | **nothing** | [X1][x1] ("once a week") |
 | `toolhead_fans` | Check and clean the toolhead fans | — | 1 week | **nothing** | [X1][x1] ("checking the fans every week") |
 
@@ -100,7 +100,7 @@ value) to the device registry's `model`, and `catalog.normalize_family` maps it:
 | `P1P` | P1P | [P1 series page][p1]. Open frame, so no chamber filter. |
 | `P1S` | P1S | Same page, but the P1S is the enclosed variant and takes a filter. |
 | `P2` | P2S, X2D | [P2S maintenance][p2s]; the two share an [air-filter guide][p2filter]. |
-| `A1` | A1, A1MINI | [A1 maintenance][a1]. Dual Z lead screws, no camera in the box. |
+| `A1` | A1, A1MINI | [A1 maintenance][a1]. Dual Z lead screws; no published camera cadence. |
 | `H2` | H2C, H2D, H2DPRO, H2S | [H2 maintenance][h2]. Only the H2D has a page; the rest are the same chassis. |
 | `unknown` | A2L, anything Bambu ships next | No page found. |
 
