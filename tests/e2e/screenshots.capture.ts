@@ -34,7 +34,9 @@ async function dismissWelcome(page: Page): Promise<void> {
 
 test('capture the firmware glue flow', async ({ page, request }) => {
   const panel = page.locator('home-keeper-panel').first();
-  const card = panel.locator('ha-card.hk-card', { hasText: PRINTER_NAME }).first();
+  // Match the firmware task by name — the container also seeds a maintenance task on
+  // the same printer, so filtering on the printer name alone is ambiguous.
+  const card = panel.locator('ha-card.hk-card', { hasText: TASK_TEXT }).first();
 
   // 1. Firmware update available → a due task appears, "Managed by Bambu Lab".
   await setFirmwareAvailable(request, true);
@@ -56,7 +58,7 @@ test('capture the firmware glue flow', async ({ page, request }) => {
   await reloadUntil(page, async () => (await monitored.count()) > 0);
   await dismissWelcome(page);
   await monitored.locator('summary').click();
-  await expect(monitored.locator('ha-card.hk-card', { hasText: PRINTER_NAME }).first()).toBeVisible();
+  await expect(monitored.locator('ha-card.hk-card', { hasText: TASK_TEXT }).first()).toBeVisible();
   await page.waitForTimeout(600);
   await page.screenshot({ path: `${OUT}/flow-2-monitored.png`, fullPage: true });
 });

@@ -14,7 +14,8 @@ from __future__ import annotations
 
 import pytest
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import device_registry as dr, entity_registry as er
+from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 from homeassistant.setup import async_setup_component
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -364,7 +365,7 @@ def _make_usage_hours_sensor(
 def _catalog_tasks(hk) -> list[dict]:
     return [
         t
-        for t in hk.tasks()
+        for t in hk.tasks.values()
         if (t.get("source") or {}).get(DOMAIN, {}).get("item", "firmware") != "firmware"
     ]
 
@@ -466,7 +467,7 @@ async def test_catalog_and_firmware_tasks_coexist(hass: HomeAssistant) -> None:
             "item_camera_lens_enabled": False,
         },
     )
-    all_tasks = hk.tasks()
+    all_tasks = list(hk.tasks.values())
     firmware = [t for t in all_tasks if t["recurrence_type"] == "triggered"]
     assert len(firmware) == 1
     assert firmware[0]["next_due"]  # still armed by the update entity

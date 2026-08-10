@@ -22,7 +22,8 @@ from typing import Any
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
 from homeassistant.core import Event, HomeAssistant, State, callback
-from homeassistant.helpers import device_registry as dr, entity_registry as er
+from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.event import async_track_state_change_event
 
 from . import logic
@@ -153,7 +154,7 @@ class BambuLabGlue:
                 },
                 blocking=False,
             )
-        except Exception:  # noqa: BLE001 — discovery is best-effort; never break setup
+        except Exception:
             _LOGGER.debug("Home Keeper companion registration failed", exc_info=True)
 
     # ── entity tracking ──────────────────────────────────────────────────────
@@ -260,7 +261,10 @@ class BambuLabGlue:
         elif isinstance(action, logic.ArmTask):
             if self._hk_ready("trigger_task"):
                 await self.hass.services.async_call(
-                    HK_DOMAIN, "trigger_task", {"task_id": action.task_id}, blocking=True
+                    HK_DOMAIN,
+                    "trigger_task",
+                    {"task_id": action.task_id},
+                    blocking=True,
                 )
                 _LOGGER.debug("Armed firmware task %s", action.task_id)
         elif isinstance(action, logic.ClearTask):
@@ -293,19 +297,18 @@ class BambuLabGlue:
                     blocking=True,
                 )
                 _LOGGER.debug("Deleted firmware task %s", action.task_id)
-        elif isinstance(action, logic.UpdateTask):
-            if self._hk_ready("update_task"):
-                payload: dict[str, Any] = {"task_id": action.task_id}
-                if action.chips is not None:
-                    payload["task_chips"] = action.chips
-                if action.notes is not None:
-                    payload["notes"] = action.notes
-                if action.fields:
-                    payload.update(action.fields)
-                await self.hass.services.async_call(
-                    HK_DOMAIN, "update_task", payload, blocking=True
-                )
-                _LOGGER.debug("Refreshed task %s", action.task_id)
+        elif isinstance(action, logic.UpdateTask) and self._hk_ready("update_task"):
+            payload: dict[str, Any] = {"task_id": action.task_id}
+            if action.chips is not None:
+                payload["task_chips"] = action.chips
+            if action.notes is not None:
+                payload["notes"] = action.notes
+            if action.fields:
+                payload.update(action.fields)
+            await self.hass.services.async_call(
+                HK_DOMAIN, "update_task", payload, blocking=True
+            )
+            _LOGGER.debug("Refreshed task %s", action.task_id)
 
     # ── firmware update state handler ────────────────────────────────────────
     async def _on_update_state(self, event: Event) -> None:

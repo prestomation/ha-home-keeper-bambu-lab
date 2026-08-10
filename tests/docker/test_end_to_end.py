@@ -129,28 +129,63 @@ def test_available_again_rearms_without_duplicating(api):
     api.poll_state(TODO, str(base))
 
 
+def _maintenance_task(api) -> dict | None:
+    """The seeded maintenance task (Z-axis lead screws), or ``None``."""
+    tasks = api.call_service_response("home_keeper", "list_tasks", {})["tasks"]
+    for task in tasks:
+        if "lead screws" in (task.get("name") or "").lower():
+            return task
+    return None
+
+
+def _poll_maintenance(api, predicate, timeout: float = 40) -> dict:
+    deadline = time.monotonic() + timeout
+    last = None
+    while time.monotonic() < deadline:
+        last = _maintenance_task(api)
+        if last is not None and predicate(last):
+            return last
+        time.sleep(1)
+    raise AssertionError(f"maintenance task never satisfied predicate; last={last}")
+
+
 def test_maintenance_catalog_task_arms_once_the_meter_advances(api):
     """The catalog's headline path: printer hours advance, a maintenance task comes due.
 
     The container's config entry is seeded with the catalog on and exactly one item
-    enabled (``z_lead_screws``, target 5 h — see ``ha_config/.storage/core.config_entries``),
-    so the to-do count moves by one and only for a reason we control.
+    enabled (``z_lead_screws``, target 5 h — see ``ha_config/.storage/core.config_entries``).
 
-    Note the deliberate two-step nudge. A usage task created *after* Home Keeper has
-    started has no meter baseline yet: Home Keeper stamps it on its first evaluation of
-    the bound sensor, which is the next state change (or the 5-minute coordinator tick).
-    So the first advance anchors the meter and the second one is what actually crosses
-    the target. Nothing here is this glue's code — Home Keeper does the arming, which is
-    exactly the division of labour the catalog is built on.
+    Asserted against the task itself rather than the to-do count: the firmware tests in
+    this file move that count around, and this test needs to be about one task.
+
+    Note the deliberate two-step nudge. A usage task has no meter baseline until Home
+    Keeper first evaluates the bound sensor, which happens on the next state change (or
+    the 5-minute coordinator tick). So the first advance anchors the meter and the
+    second one is what actually crosses the target. Nothing here is this glue's code:
+    Home Keeper does the arming, which is exactly the division of labour the catalog is
+    built on.
     """
-    base = _count(api)
+    task = _maintenance_task(api)
+    assert task is not None, "the seeded catalog item should have created a task"
+    assert task["source"]["home_keeper_bambu_lab"]["item"] == "z_lead_screws"
 
-    # First nudge: Home Keeper anchors the meter at the current reading. Dormant, so the
-    # to-do list must not move.
+    # Complete it if a previous run left it armed, so this test can be re-run against a
+    # live container. Completing a usage task also re-anchors its baseline.
+    if task.get("next_due"):
+        api.call_service("home_keeper", "complete_task", {"task_id": task["id"]})
+    task = _poll_maintenance(api, lambda t: not t.get("next_due"))
+
+    # First nudge anchors the meter (if it wasn't already) and must not arm anything.
     api.call_service("bambu_lab", "advance_usage_hours", {"hours": 1})
-    time.sleep(5)
-    assert _count(api) == base, "a freshly baselined usage task must stay dormant"
+    _poll_maintenance(
+        api, lambda t: (t.get("sensor") or {}).get("baseline") is not None
+    )
+    time.sleep(3)
+    assert not _maintenance_task(api).get("next_due"), (
+        "one hour of use must not cross a five-hour target"
+    )
 
     # Second nudge, well past the 5-hour target -> Home Keeper arms it.
     api.call_service("bambu_lab", "advance_usage_hours", {"hours": 25})
-    api.poll_state(TODO, str(base + 1))
+    armed = _poll_maintenance(api, lambda t: bool(t.get("next_due")))
+    assert armed["recurrence_type"] == "sensor"

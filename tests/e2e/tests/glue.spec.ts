@@ -28,7 +28,10 @@ test('firmware available → glue creates a read-only due task; installed → Mo
 }) => {
   const errors = trackPanelErrors(page);
   const panel = page.locator('home-keeper-panel').first();
-  const activeCard = panel.locator('ha-card.hk-card', { hasText: PRINTER_NAME }).first();
+  // Match on the task's *name*, not just the printer's: the container also seeds a
+  // maintenance-catalog task for the same printer, so `hasText: PRINTER_NAME` alone
+  // would happily pick that one instead.
+  const activeCard = panel.locator('ha-card.hk-card', { hasText: TASK_TEXT }).first();
 
   // 1) Firmware update becomes available → the glue creates an armed (due-now) task.
   await setFirmwareAvailable(request, true);
@@ -50,7 +53,7 @@ test('firmware available → glue creates a read-only due task; installed → Mo
 
   await expect(monitored).not.toHaveAttribute('open', /.*/);
   await monitored.locator('summary').click();
-  const dormantCard = monitored.locator('ha-card.hk-card', { hasText: PRINTER_NAME }).first();
+  const dormantCard = monitored.locator('ha-card.hk-card', { hasText: TASK_TEXT }).first();
   await expect(dormantCard).toBeVisible();
   await expect(dormantCard).toContainText(TASK_TEXT);
   // Still read-only, and the install was recorded as a completion.

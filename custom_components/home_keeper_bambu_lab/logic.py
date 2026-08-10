@@ -459,9 +459,7 @@ def build_catalog_task_payload(
     and checks it off.
     """
     payload: dict[str, Any] = {
-        "name": MAINTENANCE_NAME_TEMPLATE.format(
-            item_name=item.name, printer_name=printer_name
-        ),
+        "name": _format_item_name(item.name, printer_name),
         "notes": item.notes,
         "device_id": device_id,
         "source": {
@@ -495,6 +493,21 @@ def build_catalog_task_payload(
         payload["interval"] = item.interval if item.is_usage else interval
         payload["unit"] = item.unit
     return payload
+
+
+def _format_item_name(item_name: str, printer_name: str) -> str:
+    """Render a catalog task's name, defensively.
+
+    Mirrors ``_format_name``'s guard on the firmware side: a printer whose
+    (user-editable) name contains a brace would otherwise raise here and drop the whole
+    catalog for that printer.
+    """
+    try:
+        return MAINTENANCE_NAME_TEMPLATE.format(
+            item_name=item_name, printer_name=printer_name
+        )
+    except (KeyError, IndexError, ValueError):
+        return f"{item_name}: {printer_name}"
 
 
 def catalog_task_drift(
