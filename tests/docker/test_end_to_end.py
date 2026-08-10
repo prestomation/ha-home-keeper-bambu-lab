@@ -131,7 +131,15 @@ def test_every_real_printer_model_is_classified_by_the_catalog():
         pytest.skip("ha-bambulab not staged (run ci/fetch-upstreams.sh first)")
 
     models = _real_printer_models()
+    # Guard the *parser*, not just its output: if ha-bambulab reformats the enum and the
+    # regex quietly starts matching something else (or nothing), this fails here rather
+    # than silently reporting "everything is classified" over an empty list.
     assert len(models) >= 10, f"suspiciously few models parsed: {models}"
+    for known in ("X1C", "P1S", "A1MINI", "H2D"):
+        assert known in models, (
+            f"{known} missing from the parsed Printers enum — the regex in "
+            f"_real_printer_models() has probably stopped matching. Parsed: {models}"
+        )
     unclassified = [m for m in models if m not in catalog.MODEL_FAMILIES]
     assert not unclassified, (
         "ha-bambulab ships printer models the maintenance catalog has no opinion on: "

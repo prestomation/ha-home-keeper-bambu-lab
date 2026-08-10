@@ -117,7 +117,14 @@ def normalize_family(model: Any) -> str:
 
 @dataclass(frozen=True)
 class ModelOverride:
-    """How one family differs from an item's baseline. ``None`` means "inherit"."""
+    """How one family differs from an item's baseline. ``None`` means "inherit".
+
+    Because ``None`` is the inherit sentinel, a family can *retune* ``hours`` but cannot
+    *remove* it: whether an item is metered or calendar-only is fixed by the catalog, not
+    by the family. That is deliberate — the options flow shows one interval field per
+    item, and which number it means (printer hours or calendar units) has to be stable,
+    or a stored override would silently change axis when a user corrects the model.
+    """
 
     enabled: bool | None = None
     hours: int | None = None
@@ -170,7 +177,12 @@ class ResolvedItem:
 
     @property
     def is_usage(self) -> bool:
-        """Whether this resolves to a metered task (the family may have removed hours)."""
+        """Whether this resolves to a metered task.
+
+        A family can retune ``hours`` but never remove it — ``None`` on a
+        :class:`ModelOverride` means *inherit* — so this always matches the catalog
+        item's own usage-vs-calendar nature.
+        """
         return self.hours is not None
 
 
@@ -394,8 +406,9 @@ def resolve(
     """Apply the family override then the user's stored options to *item*.
 
     Layered lowest to highest: the item's own baseline, the family's override, the
-    user's per-printer option. A non-positive or unparseable interval override falls
-    back to the resolved default so a blanked-out field can't produce an invalid task.
+    0.2.0b1 flat option, the user's per-printer option. A non-positive or unparseable
+    interval override falls back to the resolved default so a blanked-out field can't
+    produce an invalid task.
     """
     options = options or {}
     override = item.by_family.get(family) or ModelOverride()
@@ -406,25 +419,35 @@ def resolve(
     unit = item.unit if override.unit is None else override.unit
     notes = item.notes if override.notes is None else override.notes
 
+    # The legacy layer is deliberately *outside* the serial check: the 0.2.0b1 keys were
+    # one flat set applied to every printer, so they carry no serial and must still apply
+    # to a printer we could not derive one for. Gating them on `serial` silently dropped
+    # a preview tester's answers for such a printer.
+    if _legacy_key_enabled(item.key) in options:
+        enabled = bool(options[_legacy_key_enabled(item.key)])
+    raw = options.get(_legacy_key_interval(item.key))
+
     if serial:
         enabled_key = option_key_enabled(serial, item.key)
         if enabled_key in options:
             enabled = bool(options[enabled_key])
-        elif _legacy_key_enabled(item.key) in options:
-            enabled = bool(options[_legacy_key_enabled(item.key)])
+        per_printer = options.get(option_key_interval(serial, item.key))
+        if per_printer is not None:
+            raw = per_printer
 
-        raw = options.get(option_key_interval(serial, item.key))
-        if raw is None:
-            raw = options.get(_legacy_key_interval(item.key))
-        try:
-            override_interval = int(raw or 0)
-        except (TypeError, ValueError):
-            override_interval = 0
-        if override_interval > 0:
-            if hours is not None:
-                hours = override_interval
-            else:
-                interval = override_interval
+    try:
+        override_interval = int(raw or 0)
+    except (TypeError, ValueError):
+        override_interval = 0
+    if override_interval > 0:
+        # ``hours`` decides which number the one interval field means. A family override
+        # can retune it but never remove it (None is the inherit sentinel), so an item's
+        # usage-vs-calendar nature is fixed by the catalog and a stored override can't be
+        # reinterpreted against the axis the user chose it for.
+        if hours is not None:
+            hours = override_interval
+        else:
+            interval = override_interval
 
     return ResolvedItem(
         item=item,

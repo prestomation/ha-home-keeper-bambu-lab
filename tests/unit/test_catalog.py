@@ -225,9 +225,18 @@ def test_the_user_option_beats_the_family_which_beats_the_item():
     assert _resolved("carbon_rods", C.FAMILY_A1, SERIAL, on).enabled is True
 
 
-def test_options_are_ignored_when_we_have_no_serial_to_key_them_on():
+def test_per_printer_options_are_ignored_when_we_have_no_serial_to_key_them_on():
     off = {C.option_key_enabled(SERIAL, "carbon_filter"): False}
     assert _resolved("carbon_filter", C.FAMILY_X1, "", off).enabled is True
+
+
+def test_the_legacy_flat_options_still_apply_without_a_serial():
+    # The 0.2.0b1 keys were one flat set for every printer, so they carry no serial.
+    # Gating them behind one would silently drop a preview tester's answers for a
+    # printer whose serial we couldn't derive.
+    legacy = {"item_carbon_filter_enabled": False, "item_z_lead_screws_interval": 600}
+    assert _resolved("carbon_filter", C.FAMILY_X1, "", legacy).enabled is False
+    assert _resolved("z_lead_screws", C.FAMILY_X1, "", legacy).hours == 600
 
 
 def test_the_flat_option_keys_from_the_first_beta_still_apply():
@@ -236,9 +245,22 @@ def test_the_flat_option_keys_from_the_first_beta_still_apply():
     legacy = {"item_carbon_filter_enabled": False, "item_z_lead_screws_interval": 600}
     assert _resolved("carbon_filter", C.FAMILY_X1, SERIAL, legacy).enabled is False
     assert _resolved("z_lead_screws", C.FAMILY_X1, SERIAL, legacy).hours == 600
-    # A per-printer answer wins over the legacy one for that printer.
+    # A per-printer answer wins over the legacy one for that printer, in both
+    # directions — a legacy True must not resurrect an item the user has since
+    # switched off for this printer, and vice versa.
     both = {**legacy, C.option_key_enabled(SERIAL, "carbon_filter"): True}
     assert _resolved("carbon_filter", C.FAMILY_X1, SERIAL, both).enabled is True
+    inverted = {
+        "item_carbon_rods_enabled": True,
+        C.option_key_enabled(SERIAL, "carbon_rods"): False,
+    }
+    assert _resolved("carbon_rods", C.FAMILY_X1, SERIAL, inverted).enabled is False
+    # Same for the interval: the per-printer number wins even when a legacy one exists.
+    intervals = {
+        "item_z_lead_screws_interval": 600,
+        C.option_key_interval(SERIAL, "z_lead_screws"): 900,
+    }
+    assert _resolved("z_lead_screws", C.FAMILY_X1, SERIAL, intervals).hours == 900
 
 
 # ── payload shape ────────────────────────────────────────────────────────────
