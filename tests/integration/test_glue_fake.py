@@ -35,6 +35,20 @@ pytestmark = pytest.mark.skipif(
 )
 
 
+# Home Keeper gained the usage-task *time backstop* (``sensor.also_every`` +
+# ``combinator``) in 0.12.0. The glue sends those keys unconditionally: an older
+# ``normalize_sensor`` builds its result from known keys only, so it drops them and the
+# task still works as a plain meter. CI installs Home Keeper from main, which may predate
+# that release, so probe for it rather than version-gating — and assert the degradation
+# explicitly, which makes the compatibility claim executable instead of aspirational.
+try:  # pragma: no cover - depends on the installed home-keeper
+    from home_keeper.const import SENSOR_COMBINATORS  # noqa: F401
+
+    HK_HAS_BACKSTOP = True
+except ImportError:  # pragma: no cover
+    HK_HAS_BACKSTOP = False
+
+
 async def _setup_glue(hass: HomeAssistant) -> MockConfigEntry:
     entry = MockConfigEntry(domain=DOMAIN, data={}, options={})
     entry.add_to_hass(hass)
@@ -417,8 +431,14 @@ async def test_catalog_pushes_a_usage_task_with_a_time_backstop(
     assert task["recurrence_type"] == "sensor"
     assert task["sensor"]["entity_id"] == usage_entity
     assert task["sensor"]["mode"] == "usage"
-    assert task["sensor"]["also_every"] == {"interval": 3, "unit": "months"}
-    assert task["sensor"]["combinator"] == "any"
+    if HK_HAS_BACKSTOP:
+        assert task["sensor"]["also_every"] == {"interval": 3, "unit": "months"}
+        assert task["sensor"]["combinator"] == "any"
+    else:
+        # Older Home Keeper: the unknown keys are dropped and the task degrades to a
+        # plain meter, which is exactly what lets the glue send them unconditionally.
+        assert "also_every" not in task["sensor"]
+        assert "combinator" not in task["sensor"]
     assert task["device_id"] == device_id
     # A human does this work, so it must stay completable and editable.
     managed = task["managed_by"]
