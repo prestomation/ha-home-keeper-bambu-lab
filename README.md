@@ -1,5 +1,6 @@
 # Home Keeper — Bambu Lab
 
+[![Integration Usage][usage-shield]][usage]
 [![GitHub Release][release-shield]][releases]
 [![License][license-shield]](LICENSE)
 [![hacs][hacs-shield]][hacs]
@@ -180,6 +181,8 @@ and [`docs/GLUE_INTEGRATIONS.md`](https://github.com/prestomation/ha-home-keeper
 <!-- Badge reference links. -->
 
 [releases]: https://github.com/prestomation/ha-home-keeper-bambu-lab/releases
+[usage-shield]: https://img.shields.io/badge/dynamic/json?color=41BDF5&logo=home-assistant&label=integration%20usage&suffix=%20installs&cacheSeconds=15600&url=https%3A%2F%2Fanalytics.home-assistant.io%2Fcustom_integrations.json&query=%24.home_keeper_bambu_lab.total&style=for-the-badge
+[usage]: https://analytics.home-assistant.io/
 [release-shield]: https://img.shields.io/github/release/prestomation/ha-home-keeper-bambu-lab.svg?style=for-the-badge
 [license-shield]: https://img.shields.io/github/license/prestomation/ha-home-keeper-bambu-lab.svg?style=for-the-badge
 [hacs-shield]: https://img.shields.io/badge/HACS-Custom-41BDF5.svg?style=for-the-badge
