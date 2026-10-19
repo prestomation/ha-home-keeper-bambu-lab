@@ -68,7 +68,7 @@ under Home Keeper's **Settings → Companions**. Every cross-integration call is
 ## Install
 
 1. Install **Home Keeper** and the **Bambu Lab** integration, and add your printer.
-2. Add this repo to HACS as a custom repository (category: Integration), install, restart.
+2. This integration is in the default HACS store. In HACS, search for **Home Keeper — Bambu Lab**, install it, and restart.
 3. Settings → Devices & Services → **Add Integration** → *Home Keeper — Bambu Lab*.
 
 ### Options
@@ -185,7 +185,7 @@ and [`docs/GLUE_INTEGRATIONS.md`](https://github.com/prestomation/ha-home-keeper
 [usage]: https://analytics.home-assistant.io/
 [release-shield]: https://img.shields.io/github/release/prestomation/ha-home-keeper-bambu-lab.svg?style=for-the-badge
 [license-shield]: https://img.shields.io/github/license/prestomation/ha-home-keeper-bambu-lab.svg?style=for-the-badge
-[hacs-shield]: https://img.shields.io/badge/HACS-Custom-41BDF5.svg?style=for-the-badge
+[hacs-shield]: https://img.shields.io/badge/HACS-Default-41BDF5.svg?style=for-the-badge
 [hacs]: https://github.com/hacs/integration
 [maintenance-shield]: https://img.shields.io/badge/maintainer-%40prestomation-blue.svg?style=for-the-badge
 [kofi-shield]: https://img.shields.io/badge/Ko--fi-donate-FF5E5B?style=for-the-badge&logo=kofi&logoColor=white
