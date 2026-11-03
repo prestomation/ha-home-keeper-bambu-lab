@@ -7,6 +7,10 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 cleanup() {
+  # Save the Home Assistant log first: `down` removes the container and its log.
+  # Absolute path to the project, so this works from any directory.
+  # scripts/check_ha_log.py reads this file in CI.
+  (cd "$ROOT/tests/docker" && docker compose logs --no-color homeassistant > "$ROOT/ha-docker.log") || true
   if [ "${KEEP_UP:-0}" != "1" ]; then
     (cd tests/docker && docker compose down -v) || true
   fi

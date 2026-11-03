@@ -20,3 +20,7 @@ docs/videos/
 
 # Release build artifact (built by ci/build-zip.sh)
 home_keeper_bambu_lab.zip
+
+# HA container logs saved by ci/test-docker.sh and ci/e2e-up.sh
+ha-*.log
+*.log
